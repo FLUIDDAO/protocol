@@ -1,0 +1,16 @@
+node_modules
+package-lock.json
+typechain-types
+
+abi/
+
+
+cache
+artifacts
+
+.vscode
+deployments
+coverage
+coverage.json
+
+.env

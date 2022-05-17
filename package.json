@@ -1,0 +1,56 @@
+{
+    "name": "FLUID DAO Protocol",
+    "version": "1.0.0",
+    "description": "Smart contracts Fluid DAO",
+    "homepage": "https://defitrader.notion.site/FLUID-DAO-v1-1c065c57a3e744f4b5ccffbd7b4f5da4",
+    "keywords": [
+        "erc20",
+        "erc721",
+        "ethereum",
+        "decentralization",
+        "defi",
+        "DAO"
+    ],
+    "author": "@cartercarlson",
+    "license": "MIT",
+    "scripts": {
+        "compile": "hardhat compile",
+        "test": "hardhat test",
+        "deploy": "hardhat run scripts/deploy.ts"
+    },
+    "dependencies": {
+        "@openzeppelin/contracts": "^4.5.0"
+    },
+    "devDependencies": {
+        "@commitlint/cli": "^13.1.0",
+        "@commitlint/config-conventional": "^13.1.0",
+        "@nomiclabs/hardhat-ethers": "^2.0.4",
+        "@nomiclabs/hardhat-etherscan": "^2.1.4",
+        "@nomiclabs/hardhat-waffle": "^2.0.2",
+        "@typechain/ethers-v5": "^9.0.0",
+        "@typechain/hardhat": "^4.0.0",
+        "@types/big.js": "^6.1.1",
+        "@types/dotenv": "^8.2.0",
+        "@types/mocha": "^9.1.0",
+        "@types/node": "^17.0.10",
+        "chai": "^4.3.4",
+        "commander": "^6.1.0",
+        "decimal.js": "^10.3.1",
+        "dotenv": "^14.2.0",
+        "eth-sig-util": "^3.0.1",
+        "ethereum-waffle": "^3.2.2",
+        "ethereumjs-util": "^7.1.4",
+        "ethers": "^5.5.3",
+        "fs": "^0.0.1-security",
+        "hardhat": "^2.8.4",
+        "hardhat-abi-exporter": "^2.8.0",
+        "hardhat-deploy": "^0.9.26",
+        "hardhat-deploy-ethers": "^0.3.0-beta.13",
+        "hardhat-gas-reporter": "^1.0.7",
+        "ts-generator": "^0.1.1",
+        "ts-node": "^10.4.0",
+        "tslib": "^2.3.1",
+        "typechain": "^7.0.0",
+        "typescript": "^4.5.5"
+    }
+}
