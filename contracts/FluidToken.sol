@@ -1,39 +1,42 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/ERC20VotesComp.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
+import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import {ERC20VotesComp} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20VotesComp.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 import {IFluidToken} from "./interfaces/IFluidToken.sol";
-import "./interfaces/IUniswapV2Router02.sol";
-import "./interfaces/IUniswapV2Factory.sol";
+import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
+import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
 
-interface ITreasury {
-    function validatePayout() external;
-}
-
+// TODO: will dao treasury ever expected to be changed
+// Do we need the whitelist of addresses that can transfer w/o fees?
 contract FluidToken is
     IFluidToken,
     ERC20Permit,
     ERC20Votes,
     ERC20VotesComp,
     Ownable,
-    Pausable
+    Pausable,
+    ReentrancyGuard
 {
-    address public treasury;
+    address public constant DAO = 
+        0xB17ca1BC1e9a00850B0b2436e41A055403512387;
     address public constant DEAD_ADDRESS =
         0x000000000000000000000000000000000000dEaD;
     mapping(address => bool) public whitelistedAddress;
 
-    IUniswapV2Router02 public uniswapV2Router;
-    address public uniswapV2Pair;
+    IUniswapV2Router02 public router;
+    address public sushiPair;
+    address public stakingPool;
 
     bool inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
 
-    uint256 private numTokensSellToAddToLiquidity = 500 * 10**18;
+    // uint256 private numTokensSellToAddToLiquidity = 500 * 10**18;
+    address public auctionHouse;
 
     event TreasuryAddressUpdated(address newTreasury);
     event WhitelistAddressUpdated(address whitelistAccount, bool value);
@@ -44,28 +47,23 @@ contract FluidToken is
         uint256 tokensIntoLiqudity
     );
 
-    modifier lockTheSwap() {
-        inSwapAndLiquify = true;
-        _;
-        inSwapAndLiquify = false;
-    }
-
     constructor(
+        address _stakingPool,
         address initialHolder,
         uint256 initialSupply
     ) ERC20("Fluid DAO", "FLD") ERC20Permit("fluid")
     {
         // SushiV2Router02 address. It comes from https://dev.sushi.com/sushiswap/contracts
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(
+        IUniswapV2Router02 _router = IUniswapV2Router02(
             0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
-            // 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
         );
         // Create a uniswap pair for this new token
-        uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
-            .createPair(address(this), _uniswapV2Router.WETH());
+        sushiPair = IUniswapV2Factory(_router.factory())
+            .createPair(address(this), _router.WETH());
 
         // set the rest of the contract variables
-        uniswapV2Router = _uniswapV2Router;
+        router = _router;
+        stakingPool = _stakingPool;
 
         _mint(initialHolder, initialSupply);
     }
@@ -137,7 +135,7 @@ contract FluidToken is
         return type(uint224).max;
     }
 
-    //to recieve ETH from uniswapV2Router when swaping
+    //to recieve ETH from router when swaping
     receive() external payable {}
 
 
@@ -149,47 +147,39 @@ contract FluidToken is
         if (whitelistedAddress[sender] || whitelistedAddress[recipient]) {
             super._transfer(sender, recipient, amount);
         } else {
-            // 0.1% will be sent to a burn address
-            uint256 burnAmount = amount / 1000;
-            super._transfer(sender, DEAD_ADDRESS, burnAmount);
-            // 0.1% will be sent to the DAO treasury
-            uint256 taxAmount = amount / 1000;
-            super._transfer(sender, treasury, taxAmount);
-            ITreasury(treasury).validatePayout();
-            // 0.1% will be sent to the $FLUID/$ETH liquidity pool
-            uint256 liquidityAmount = amount / 1000;
-            super._transfer(sender, address(this), liquidityAmount);
-            _swapAndLiquify(sender);
-            // 0.1% will be sent to all $FLUID stakers to reward loyal holders.
-            uint256 rewardAmount = amount / 1000;
-            super._transfer(sender, address(this), rewardAmount);
-
-            // The other amount will be sent to the receipient
-            super._transfer(
-                sender,
-                recipient,
-                amount - taxAmount - burnAmount - liquidityAmount - rewardAmount
-            );
+            // accrue 0.4% for fees to be later distributed
+            uint256 transferFee = amount / 250;
+            super_.transfer(sender, address(this), transferFee);
+            // Send remaining amount to recipient
+            super_.transfer(sender, recipient, amount - transferFee);
         }
     }
 
-    function _swapAndLiquify(address from) internal {
-        uint256 contractTokenBalance = balanceOf(address(this));
-        bool overMinTokenBalance = contractTokenBalance >=
-            numTokensSellToAddToLiquidity;
-        if (
-            overMinTokenBalance &&
-            !inSwapAndLiquify &&
-            from != uniswapV2Pair &&
-            swapAndLiquifyEnabled
-        ) {
-            contractTokenBalance = numTokensSellToAddToLiquidity;
-            //add liquidity
-            swapAndLiquify(contractTokenBalance);
+    /// @notice Rewardable function to distrubute fees
+    /// @dev .1% of all transfer fees are sent to burn, dao, stakers, and add LP
+    
+    function distributeFees() external {
+        uint256 balance = balanceOf(address(this));
+        // Give caller 1% of fees accrued
+        uint256 reward = balance / 100;
+        // Break up the accrued fees four ways equally for distribution
+        uint256 amount = (balance - reward) / 4;
+
+        // Reward the caller
+        super._transfer(address(this), msg.sender, reward);
+        // Transfer fees and provide LP
+        super._transfer(address(this), DEAD_ADDRESS, amount);
+        super._transfer(address(this), DAO, amount);
+        // TODO: this transfer should be addToAllocation func for staking pool
+        super._transfer(address(this), stakingPool, amount);
+        if (swapAndLiquifyEnabled) {
+            swapAndLiquify(amount);
         }
+
     }
 
-    function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
+    function swapAndLiquify(uint256 contractTokenBalance) private nonReentrant {
+    
         // split the contract balance into halves
         uint256 half = contractTokenBalance / 2;
         uint256 otherHalf = contractTokenBalance - half;
@@ -216,12 +206,12 @@ contract FluidToken is
         // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
         path[0] = address(this);
-        path[1] = uniswapV2Router.WETH();
+        path[1] = router.WETH();
 
-        _approve(address(this), address(uniswapV2Router), tokenAmount);
+        _approve(address(this), address(router), tokenAmount);
 
         // make the swap
-        uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
             tokenAmount,
             0, // accept any amount of ETH
             path,
@@ -232,10 +222,10 @@ contract FluidToken is
 
     function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private {
         // approve token transfer to cover all possible scenarios
-        _approve(address(this), address(uniswapV2Router), tokenAmount);
+        _approve(address(this), address(router), tokenAmount);
 
         // add the liquidity
-        uniswapV2Router.addLiquidityETH{value: ethAmount}(
+        router.addLiquidityETH{value: ethAmount}(
             address(this),
             tokenAmount,
             0, // slippage is unavoidable
