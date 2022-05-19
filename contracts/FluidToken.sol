@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import {ERC20VotesComp} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20VotesComp.sol";
@@ -11,7 +12,7 @@ import {IFluidToken} from "./interfaces/IFluidToken.sol";
 import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
 
-// TODO: will dao ever expected to be changed
+// TODO: will we ever expect DAO to change?
 // TODO: Do we need the whitelist of addresses that can transfer w/o fees?
 contract FluidToken is
     IFluidToken,
@@ -127,9 +128,9 @@ contract FluidToken is
         } else {
             // accrue 0.4% for fees to be later distributed
             uint256 transferFee = amount / 250;
-            super_.transfer(sender, address(this), transferFee);
+            super._transfer(sender, address(this), transferFee);
             // Send remaining amount to recipient
-            super_.transfer(sender, recipient, amount - transferFee);
+            super._transfer(sender, recipient, amount - transferFee);
         }
     }
 
