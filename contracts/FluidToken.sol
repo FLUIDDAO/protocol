@@ -11,8 +11,8 @@ import {IFluidToken} from "./interfaces/IFluidToken.sol";
 import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
 
-// TODO: will dao treasury ever expected to be changed
-// Do we need the whitelist of addresses that can transfer w/o fees?
+// TODO: will dao ever expected to be changed
+// TODO: Do we need the whitelist of addresses that can transfer w/o fees?
 contract FluidToken is
     IFluidToken,
     ERC20Permit,
@@ -31,16 +31,14 @@ contract FluidToken is
     IUniswapV2Router02 public router;
     address public sushiPair;
     address public stakingPool;
-
-    bool inSwapAndLiquify;
-    bool public swapAndLiquifyEnabled = true;
-
-    // uint256 private numTokensSellToAddToLiquidity = 500 * 10**18;
     address public auctionHouse;
 
-    event TreasuryAddressUpdated(address newTreasury);
-    event WhitelistAddressUpdated(address whitelistAccount, bool value);
-    event SwapAndLiquifyEnabledUpdated(bool enabled);
+    bool public swapAndLiquifyEnabled = true;
+
+    event SetWhitelistAddress(address whitelistAccount, bool value);
+    event SetSwapAndLiquifyEnabled(bool enabled);
+    event SetStakingPool(address _stakingPool);
+    event SetAuctionHouse(address _auctionHouse);
     event SwapAndLiquify(
         uint256 tokensSwapped,
         uint256 ethReceived,
@@ -48,7 +46,6 @@ contract FluidToken is
     );
 
     constructor(
-        address _stakingPool,
         address initialHolder,
         uint256 initialSupply
     ) ERC20("Fluid DAO", "FLD") ERC20Permit("fluid")
@@ -63,52 +60,13 @@ contract FluidToken is
 
         // set the rest of the contract variables
         router = _router;
-        stakingPool = _stakingPool;
 
         _mint(initialHolder, initialSupply);
     }
 
     function mint(address _to, uint256 amount) external override {
+        require(msg.sender == auctionHouse, "!auctionHouse");
         _mint(_to, amount);
-    }
-
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal virtual override {
-        super._beforeTokenTransfer(from, to, amount);
-
-        require(!paused(), "ERC20Pausable: token transfer while paused");
-    }
-
-    function _afterTokenTransfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal override(ERC20, ERC20Votes) {
-        ERC20Votes._afterTokenTransfer(from, to, amount);
-    }
-
-    function _mint(address to, uint256 amount)
-        internal
-        override(ERC20, ERC20Votes)
-    {
-        super._mint(to, amount);
-    }
-
-    function _burn(address account, uint256 amount)
-        internal
-        override(ERC20, ERC20Votes)
-    {
-        super._burn(account, amount);
-    }
-
-    function setTreasuryAddress(address _treasury) external onlyOwner {
-        require(_treasury != address(0), "setTreasuryAddress: Zero address");
-        treasury = _treasury;
-        whitelistedAddress[_treasury] = true;
-        emit TreasuryAddressUpdated(_treasury);
     }
 
     function setWhitelistAddress(address _whitelist, bool _status)
@@ -117,42 +75,22 @@ contract FluidToken is
     {
         require(_whitelist != address(0), "setWhitelistAddress: Zero address");
         whitelistedAddress[_whitelist] = _status;
-        emit WhitelistAddressUpdated(_whitelist, _status);
+        emit SetWhitelistAddress(_whitelist, _status);
     }
 
-    function setSwapAndLiquifyEnabled(bool _enabled) public onlyOwner {
+    function setSwapAndLiquifyEnabled(bool _enabled) external onlyOwner {
         swapAndLiquifyEnabled = _enabled;
-        emit SwapAndLiquifyEnabledUpdated(_enabled);
+        emit SetSwapAndLiquifyEnabled(_enabled);
     }
 
-    function _maxSupply()
-        internal
-        view
-        virtual
-        override(ERC20VotesComp, ERC20Votes)
-        returns (uint224)
-    {
-        return type(uint224).max;
+    function setAuctionHouse(address _auctionHouse) external onlyOwner {
+        auctionHouse = _auctionHouse;
+        emit SetAuctionHouse(_auctionHouse);
     }
 
-    //to recieve ETH from router when swaping
-    receive() external payable {}
-
-
-    function _transfer(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) internal virtual override {
-        if (whitelistedAddress[sender] || whitelistedAddress[recipient]) {
-            super._transfer(sender, recipient, amount);
-        } else {
-            // accrue 0.4% for fees to be later distributed
-            uint256 transferFee = amount / 250;
-            super_.transfer(sender, address(this), transferFee);
-            // Send remaining amount to recipient
-            super_.transfer(sender, recipient, amount - transferFee);
-        }
+    function setStakingPool(address _stakingPool) external onlyOwner {
+        stakingPool = _stakingPool;
+        emit SetStakingPool(_stakingPool);
     }
 
     /// @notice Rewardable function to distrubute fees
@@ -177,6 +115,24 @@ contract FluidToken is
         }
 
     }
+
+
+    function _transfer(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) internal virtual override {
+        if (whitelistedAddress[sender] || whitelistedAddress[recipient]) {
+            super._transfer(sender, recipient, amount);
+        } else {
+            // accrue 0.4% for fees to be later distributed
+            uint256 transferFee = amount / 250;
+            super_.transfer(sender, address(this), transferFee);
+            // Send remaining amount to recipient
+            super_.transfer(sender, recipient, amount - transferFee);
+        }
+    }
+
 
     function swapAndLiquify(uint256 contractTokenBalance) private nonReentrant {
     
@@ -234,4 +190,50 @@ contract FluidToken is
             block.timestamp
         );
     }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual override {
+        super._beforeTokenTransfer(from, to, amount);
+
+        require(!paused(), "ERC20Pausable: token transfer while paused");
+    }
+
+    function _afterTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal override(ERC20, ERC20Votes) {
+        ERC20Votes._afterTokenTransfer(from, to, amount);
+    }
+
+    function _mint(address to, uint256 amount)
+        internal
+        override(ERC20, ERC20Votes)
+    {
+        super._mint(to, amount);
+    }
+
+    function _burn(address account, uint256 amount)
+        internal
+        override(ERC20, ERC20Votes)
+    {
+        super._burn(account, amount);
+    }
+
+    function _maxSupply()
+        internal
+        view
+        virtual
+        override(ERC20VotesComp, ERC20Votes)
+        returns (uint224)
+    {
+        return type(uint224).max;
+    }
+
+    //to recieve ETH from router when swapping
+    receive() external payable {}
+
 }
