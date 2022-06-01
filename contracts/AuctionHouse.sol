@@ -51,6 +51,7 @@ contract AuctionHouse is Pausable, ReentrancyGuard, Ownable, IAuctionHouse {
         IFluidToken _fluidToken,
         address _dao,
         address _weth,
+        uint256 _timeBuffer,
         uint256 _reservePrice,
         uint8 _minBidIncrementPercentage,
         uint256 _duration
@@ -59,6 +60,7 @@ contract AuctionHouse is Pausable, ReentrancyGuard, Ownable, IAuctionHouse {
         fluidToken = _fluidToken;
         dao = _dao;
         weth = _weth;
+        timeBuffer = _timeBuffer;
         reservePrice = _reservePrice;
         minBidIncrementPercentage = _minBidIncrementPercentage;
         duration = _duration;
