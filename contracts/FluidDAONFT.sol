@@ -20,19 +20,16 @@ contract FluidDAONFT is ERC721A, ERC2981, Ownable, ReentrancyGuard {
     using Strings for uint256;
 
     bool public isAuctionHouseLocked;
-    address public auctionHouse;
     address public royaltyReceiver;
     string private _baseURIExtended;
     mapping(uint256 => string) _tokenURIs;
 
     constructor(
         address _royaltyReceiver,
-        address _auctionHouse,
         address initialMintRecipient,
         uint256 initialMintAmount
     ) ERC721A("FluidDAONFT", "FLDN") {
         royaltyReceiver = royaltyReceiver;
-        auctionHouse = _auctionHouse;
 
         _setDefaultRoyalty(_royaltyReceiver, 1000); // 10%
         _safeMint(initialMintRecipient, initialMintAmount);
