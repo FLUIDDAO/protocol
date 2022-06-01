@@ -23,13 +23,13 @@ contract AuctionHouse is Pausable, ReentrancyGuard, Ownable, IAuctionHouse {
     address public weth;
 
     // The minimum amount of time left in an auction after a new bid is created
-    uint256 public timeBuffer = 300;
+    uint256 public timeBuffer;
 
     // The minimum price accepted in an auction
     uint256 public reservePrice;
 
     // The minimum percentage difference between the last bid amount and the current bid
-    uint8 public minBidIncrementPercentage = 2;
+    uint8 public minBidIncrementPercentage;
 
     // The duration of a single auction
     uint256 public duration;
@@ -51,7 +51,6 @@ contract AuctionHouse is Pausable, ReentrancyGuard, Ownable, IAuctionHouse {
         IFluidToken _fluidToken,
         address _dao,
         address _weth,
-        uint256 _timeBuffer,
         uint256 _reservePrice,
         uint8 _minBidIncrementPercentage,
         uint256 _duration
@@ -60,7 +59,6 @@ contract AuctionHouse is Pausable, ReentrancyGuard, Ownable, IAuctionHouse {
         fluidToken = _fluidToken;
         dao = _dao;
         weth = _weth;
-        timeBuffer = _timeBuffer;
         reservePrice = _reservePrice;
         minBidIncrementPercentage = _minBidIncrementPercentage;
         duration = _duration;
