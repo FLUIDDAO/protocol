@@ -21,6 +21,7 @@ contract FluidDAONFT is ERC721A, ERC2981, Ownable, ReentrancyGuard {
 
     bool public isAuctionHouseLocked;
     address public royaltyReceiver;
+    address public auctionHouse;
     string private _baseURIExtended;
     mapping(uint256 => string) _tokenURIs;
 
