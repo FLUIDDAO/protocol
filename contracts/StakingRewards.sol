@@ -7,8 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 // Fork of https://solidity-by-example.org/defi/staking-rewards/
 
 contract StakingRewards is Ownable, ReentrancyGuard {
-    IERC20 public rewardsToken;
-    IERC20 public stakingToken;
+    IERC20 public token;
 
     uint public rewardRate = 100;
     uint public lastUpdateTime;
@@ -33,9 +32,8 @@ contract StakingRewards is Ownable, ReentrancyGuard {
         _;
     }
 
-    constructor(address _stakingToken, address _rewardsToken) {
-        stakingToken = IERC20(_stakingToken);
-        rewardsToken = IERC20(_rewardsToken);
+    constructor(address _token) {
+        token = IERC20(_token);
     }
 
     function updateRewardRate(uint256 _rewardRate) public onlyOwner {
@@ -48,7 +46,7 @@ contract StakingRewards is Ownable, ReentrancyGuard {
         require(_amount > 0, "Cannot deposit 0");
         _totalSupply += _amount;
         _balances[msg.sender] += _amount;
-        stakingToken.transferFrom(msg.sender, address(this), _amount);
+        token.transferFrom(msg.sender, address(this), _amount);
         emit Staked(msg.sender, _amount);
     }
 
@@ -56,15 +54,19 @@ contract StakingRewards is Ownable, ReentrancyGuard {
         require(_amount > 0, "Cannot withdraw 0");
         _totalSupply -= _amount;
         _balances[msg.sender] -= _amount;
-        stakingToken.transfer(msg.sender, _amount);
+        token.transfer(msg.sender, _amount);
         emit Withdrawn(msg.sender, _amount);
     }
 
     function getReward() public updateReward(msg.sender) {
         uint reward = rewards[msg.sender];
+        require(
+            token.balanceOf(address(this)) - reward > _totalSupply,
+            "reward would draw from locked supply"
+        );
         if (reward > 0) {
             rewards[msg.sender] = 0;
-            rewardsToken.transfer(msg.sender, reward);
+            token.transfer(msg.sender, reward);
             emit RewardPaid(msg.sender, reward);
         }
     }
@@ -75,8 +77,8 @@ contract StakingRewards is Ownable, ReentrancyGuard {
     }
 
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
-        require(tokenAddress != address(stakingToken), "Cannot withdraw the staking token");
-        IERC20(tokenAddress).safeTransfer(owner, tokenAmount);
+        require(tokenAddress != address(token), "Cannot withdraw the staking token");
+        IERC20(tokenAddress).transfer(owner(), tokenAmount);
     }
 
     function rewardPerToken() public view returns (uint) {
