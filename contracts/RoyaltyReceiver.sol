@@ -3,27 +3,65 @@ pragma solidity 0.8.12;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
+import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
 
 /// @title Fluid DAO Royalties Receiver
 /// @author @cartercarlson
 /// @notice Fluid DAO contract to distribute the royalties earned
 ///     from secondary sales of the Fluid DAO NFT.
 contract RoyaltyReceiver is Ownable {
+
     address public stakingPool;
     address public dao;
+    IERC20 public fluidToken;
+    IERC20 public weth;
+    address public pair;
+    IUniswapV2Router02 public router = IUniswapV2Router02(
+        0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+    );
 
-    constructor(address _dao, address _stakingPool) {
+    constructor(
+        IFluidToken _fluidToken,
+        address _dao,
+        address _stakingPool
+    ) {
+
+        pair = _fluidToken.pair();
+        weth = router.WETH();
+
+        fluidToken = _fluidToken;
         dao = _dao;
         stakingPool = _stakingPool;
+
+        // pre-approve router spending weth
+        weth.approve(address(router), type(uint256).max);
     }
 
-    function claimRoyalties(address token) external {
+    /// @notice Claim royalties earned from FLUID NFT market sales
+    /// @dev Swaps half the royalties to FLUID and sends to stakers
+    function claimRoyalties() external {
         // divide rewards by two - distribute 
         uint256 balance = IERC20(token).balanceOf(address(this));
         uint256 functionCallReward = balance/100; // 1% reward to caller
         uint256 half = (balance - functionCallReward)/2;
-        IERC20(token).transfer(stakingPool, half);
-        IERC20(token).transfer(dao, half);
-        IERC20(token).transfer(msg.sender, functionCallReward);
+
+        swapWethForTokens(half);
+        fluidToken.transfer(dao, half);
+        fluidToken.transfer(msg.sender, functionCallReward);
+    }
+
+    function swapWethForTokens(uint256 amount) private {
+        address[] memory path = new address[](2);
+        path[0] = address(fluidToken);
+        path[1] = weth;
+
+        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            amount,
+            0,
+            path,
+            stakingPool,
+            block.timestamp
+        );
     }
 }
