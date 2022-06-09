@@ -1,45 +1,54 @@
-import "@nomiclabs/hardhat-waffle";
 import * as dotenv from "dotenv";
-import "hardhat-deploy";
+import "@nomiclabs/hardhat-waffle";
 import "hardhat-deploy-ethers";
-import { HardhatUserConfig } from "hardhat/config";
 import "@typechain/hardhat";
-import "@nomiclabs/hardhat-ethers";
-import "hardhat-gas-reporter";
 import "@nomiclabs/hardhat-etherscan";
-import "hardhat-abi-exporter";
+import { HardhatUserConfig } from "hardhat/types";
 
 dotenv.config();
 const {
     PRIVATE_KEY,
-    POLYGONSCAN_API_KEY,
+    INFURA_KEY,
+    ETHERSCAN_API_KEY,
 } = process.env;
 
+
 const config: HardhatUserConfig = {
-    networks: {
-        hardhat: {
-        },
-        mumbai: {
-            url: "https://rpc-mumbai.maticvigil.com",
-            accounts: [`0x${PRIVATE_KEY}`]
-        },
-        matic: {
-            url: "https://rpc-mainnet.maticvigil.com",
-            accounts: [`0x${PRIVATE_KEY}`]
-        }
-    },
-    etherscan: {
-        apiKey: POLYGONSCAN_API_KEY
-    },
     solidity: {
-        version: "0.8.12",
+        compilers: [{ version: "0.8.9" }],
         settings: {
             optimizer: {
                 enabled: true,
-                runs: 200
-            }
-        }
+                runs: 800,
+            },
+            metadata: {
+                // do not include the metadata hash, since this is machine dependent
+                // and we want all generated code to be deterministic
+                // https://docs.soliditylang.org/en/v0.7.6/metadata.html
+                bytecodeHash: "none",
+            },
+        },
     },
-}
+    networks: {
+        rinkeby: {
+            url: `https://rinkeby.infura.io/v3/${INFURA_KEY}` || "",
+            accounts: [`0x${PRIVATE_KEY}`]
+        },
+        // TODO add prod
+    },
+    typechain: {
+        outDir: "artifacts/types",
+        target: "ethers-v5",
+    },
+    paths: {
+        sources: "./contracts",
+        tests: "./test",
+        cache: "./cache",
+        artifacts: "./artifacts",
+    },
+    etherscan: {
+        apiKey: `${ETHERSCAN_API_KEY || ""}`,
+    },
+};
 
 export default config;
