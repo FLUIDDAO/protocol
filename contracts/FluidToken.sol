@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity 0.8.12;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -23,8 +23,7 @@ contract FluidToken is
     Pausable,
     ReentrancyGuard
 {
-    address public constant DAO = 
-        0xB17ca1BC1e9a00850B0b2436e41A055403512387;
+    address public dao;
     address public constant DEAD_ADDRESS =
         0x000000000000000000000000000000000000dEaD;
     mapping(address => bool) public whitelistedAddress;
@@ -47,6 +46,7 @@ contract FluidToken is
     );
 
     constructor(
+        address _dao,
         address initialHolder,
         uint256 initialSupply
     ) ERC20("Fluid DAO", "FLD") ERC20Permit("fluid")
@@ -61,6 +61,7 @@ contract FluidToken is
 
         // set the rest of the contract variables
         router = _router;
+        dao = _dao;
 
         _mint(initialHolder, initialSupply);
     }
@@ -108,13 +109,12 @@ contract FluidToken is
         super._transfer(address(this), msg.sender, reward);
         // Transfer fees and provide LP
         super._transfer(address(this), DEAD_ADDRESS, amount);
-        super._transfer(address(this), DAO, amount);
+        super._transfer(address(this), dao, amount);
         // TODO: this transfer should be addToAllocation func for staking pool
         super._transfer(address(this), stakingPool, amount);
         if (swapAndLiquifyEnabled) {
             swapAndLiquify(amount);
         }
-
     }
 
 
