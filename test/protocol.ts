@@ -1,73 +1,125 @@
 import { ethers } from "hardhat";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
 import { expect } from "chai";
-import { BigNumber } from "ethers";
-import { mineBlock, setAutomine } from "./utils/hardhatNode";
-import { deploy, fromETHNumber } from "./utils/helpers";
+import { Signer } from "ethers";
+import { impersonate, mineBlock, setAutomine } from "./utils/hardhatNode";
+import { deploy, fromETHNumber, getContractAt } from "./utils/helpers";
 import { 
     FluidToken,
-    StakingRewards,
+    // StakingRewards,
     FluidDAONFT,
     AuctionHouse,
-    RoyaltyReceiver
+    RoyaltyReceiver,
+    ERC20,
+    IUniswapV2Router02
 } from "../artifacts/types";
 
 const setup = async () => {
 
     const initialMintAmount = 80;
-    const DAO = "0x0";
+    const DAO = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
     // args specific to auctionHouse
     const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+    const WETHWhale = "0x57757E3D981446D585Af0D9Ae4d7DF6D64647806";
     const timeBuffer = 300;
     const reservePrice = 10**17; // 0.1 ETH
     const minBidIncrementPercentage = 2;
     const duration = 60*60*12; // 12 hrs
 
-    let deployer: SignerWithAddress;
+    let account0: SignerWithAddress;
+    let account1: SignerWithAddress;
+    let account2: SignerWithAddress;
+    let wethWhale: Signer;
     let fluidERC20: FluidToken;
     let fluidERC721: FluidDAONFT;
-    let stakingRewards: StakingRewards;
+    // let stakingRewards: StakingRewards;
     let auctionHouse: AuctionHouse;
     let royaltyReceiver: RoyaltyReceiver;
+    let weth: ERC20;
+    let router: IUniswapV2Router02;
 
-    before(async () => {
-        [deployer] = await ethers.getSigners();
-        fluidERC20 = await deploy<FluidToken>(
-            "FluidToken",
-            undefined,
-            DAO,
-            deployer.address,
-            initialMintAmount
-        );
-        stakingRewards = ""; // TODO
-        royaltyReceiver = await deploy<RoyaltyReceiver>(
-            "RoyaltyReceiver",
-            undefined,
-            DAO,
-            stakingRewards
-        );
-        fluidERC721 = await deploy<FluidDAONFT>(
-            "FluidDAONFT",
-            undefined,
-            royaltyReceiver.address,
-            DAO,
-            initialMintAmount
-        );
-        auctionHouse = await deploy<AuctionHouse>(
-            "AuctionHouse",
-            undefined,
-            fluidERC20,
-            fluidERC721,
-            DAO,
-            WETH,
-            timeBuffer,
-            reservePrice,
-            minBidIncrementPercentage,
-            duration
-        );
+    describe("FLUID DAO Protocol", () => {
 
-        // now that auction house is deployed, set to the erc721
-        await fluidERC721.setAuctionHouse(auctionHouse.address);
+        before(async () => {
+            [account0, account1, account2] = await ethers.getSigners();
+            fluidERC20 = await deploy<FluidToken>(
+                "FluidToken",
+                undefined,
+                DAO,
+                account0.address,
+                initialMintAmount
+            );
+            const stakingRewards = ethers.constants.AddressZero; // TODO
+            royaltyReceiver = await deploy<RoyaltyReceiver>(
+                "RoyaltyReceiver",
+                undefined,
+                DAO,
+                stakingRewards
+            );
+            fluidERC721 = await deploy<FluidDAONFT>(
+                "FluidDAONFT",
+                undefined,
+                royaltyReceiver.address,
+                DAO,
+                initialMintAmount
+            );
+            auctionHouse = await deploy<AuctionHouse>(
+                "AuctionHouse",
+                undefined,
+                fluidERC20,
+                fluidERC721,
+                DAO,
+                WETH,
+                timeBuffer,
+                reservePrice,
+                minBidIncrementPercentage,
+                duration
+            );
+
+            // now that auction house is deployed, set to the erc721
+            await fluidERC721.setAuctionHouse(auctionHouse.address);
+            
+            const routerAddr = await fluidERC20.router();
+            router = await getContractAt<IUniswapV2Router02>("IUniswapV2Router02", routerAddr);
+            // pre-load addresses with WETH for future use
+            weth = await getContractAt<ERC20>("ERC20", WETH);
+            wethWhale = await impersonate(WETHWhale);
+            weth.connect(wethWhale).transfer(account0.address, ethers.utils.parseEther("1000"));
+        });
+
+        describe("Fluid Token", () => {
+            it("Should mint initial amount", async () => {
+                const balance = await fluidERC20.balanceOf(account0.address);
+                expect(balance).to.equal(initialMintAmount);
+            });
+            it("Should have created the sushi pair", async () => {
+                const sushiPair = await fluidERC20.sushiPair();
+                expect(sushiPair).to.not.equal(ethers.constants.AddressZero);
+            });
+            it("Should accrue fees on transfers", async () => {
+                const halfMinted = initialMintAmount/2;
+                await fluidERC20.transfer(account1.address, halfMinted);
+                let fee1 = halfMinted * 996 / 1000;
+                let receivedAmt1 = halfMinted - fee1;
+                let balance0 = await fluidERC20.balanceOf(account0.address);
+                let balance1 = await fluidERC20.balanceOf(account1.address);
+                expect(balance0).to.equal(halfMinted);
+                expect(balance1).to.equal(receivedAmt1);
+                await fluidERC20.connect(account1).transfer(account2.address, receivedAmt1);
+                let fee2 = receivedAmt1 * 996/1000;
+                let receivedAmt2 = receivedAmt1 - fee2;
+                balance1 = await fluidERC20.balanceOf(account1.address);
+                let balance2 = await fluidERC20.balanceOf(account2.address);
+                expect(balance1).to.equal(0);
+                expect(balance2).to.equal(receivedAmt2);
+            });
+            it("Should distribute fees accordingly", async () => {
+                // We'll first need to add liquidity to the pool so distributing fees can trade
+                // Let's say 1 FLUID = 3 WETH
+
+            });
+        });
+
     });
 };
 
