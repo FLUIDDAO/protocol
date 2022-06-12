@@ -3,6 +3,7 @@ import "@nomiclabs/hardhat-waffle";
 import "hardhat-deploy-ethers";
 import "@typechain/hardhat";
 import "@nomiclabs/hardhat-etherscan";
+import "@nomiclabs/hardhat-ethers"
 import { HardhatUserConfig } from "hardhat/types";
 
 dotenv.config();
@@ -10,12 +11,13 @@ const {
     PRIVATE_KEY,
     INFURA_KEY,
     ETHERSCAN_API_KEY,
+    ALCHEMY_API_KEY
 } = process.env;
 
 
 const config: HardhatUserConfig = {
     solidity: {
-        compilers: [{ version: "0.8.9" }],
+        compilers: [{ version: "0.8.12" }],
         settings: {
             optimizer: {
                 enabled: true,
@@ -30,6 +32,16 @@ const config: HardhatUserConfig = {
         },
     },
     networks: {
+        hardhat: {
+            forking: {
+                url: `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
+                accounts: [`0x${PRIVATE_KEY}`],
+                blockNumber: 14448329
+            },
+            gas: "auto",
+            // timeout: 1800000,
+            chainId: 1,
+        },
         rinkeby: {
             url: `https://rinkeby.infura.io/v3/${INFURA_KEY}` || "",
             accounts: [`0x${PRIVATE_KEY}`]
