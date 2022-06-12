@@ -14,20 +14,18 @@ contract RoyaltyReceiver is Ownable {
 
     address public stakingPool;
     address public dao;
+    address public weth;
     IERC20 public fluidToken;
-    IERC20 public weth;
-    address public pair;
     IUniswapV2Router02 public router = IUniswapV2Router02(
         0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
     );
 
     constructor(
-        IFluidToken _fluidToken,
+        IERC20 _fluidToken,
         address _dao,
         address _stakingPool
     ) {
 
-        pair = _fluidToken.pair();
         weth = router.WETH();
 
         fluidToken = _fluidToken;
@@ -35,14 +33,14 @@ contract RoyaltyReceiver is Ownable {
         stakingPool = _stakingPool;
 
         // pre-approve router spending weth
-        weth.approve(address(router), type(uint256).max);
+        IERC20(weth).approve(address(router), type(uint256).max);
     }
 
     /// @notice Claim royalties earned from FLUID NFT market sales
     /// @dev Swaps half the royalties to FLUID and sends to stakers
     function claimRoyalties() external {
         // divide rewards by two - distribute 
-        uint256 balance = IERC20(token).balanceOf(address(this));
+        uint256 balance = IERC20(fluidToken).balanceOf(address(this));
         uint256 functionCallReward = balance/100; // 1% reward to caller
         uint256 half = (balance - functionCallReward)/2;
 
