@@ -20,7 +20,6 @@ contract FluidToken is
     ERC20Votes,
     ERC20VotesComp,
     Ownable,
-    Pausable,
     ReentrancyGuard
 {
     address public dao;
@@ -49,11 +48,11 @@ contract FluidToken is
         address _dao,
         address initialHolder,
         uint256 initialSupply
-    ) ERC20("Fluid DAO", "FLD") ERC20Permit("fluid")
+    ) ERC20("Fluid DAO", "FLD") ERC20Permit("Fluid DAO")
     {
         // SushiV2Router02 address. It comes from https://dev.sushi.com/sushiswap/contracts
         IUniswapV2Router02 _router = IUniswapV2Router02(
-            0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+            0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
         );
         // Create a uniswap pair for this new token
         sushiPair = IUniswapV2Factory(_router.factory())
@@ -197,9 +196,7 @@ contract FluidToken is
         address to,
         uint256 amount
     ) internal virtual override {
-        super._beforeTokenTransfer(from, to, amount);
-
-        require(!paused(), "ERC20Pausable: token transfer while paused");
+        return super._beforeTokenTransfer(from, to, amount);
     }
 
     function _afterTokenTransfer(
@@ -207,21 +204,21 @@ contract FluidToken is
         address to,
         uint256 amount
     ) internal override(ERC20, ERC20Votes) {
-        ERC20Votes._afterTokenTransfer(from, to, amount);
+        return super._afterTokenTransfer(from, to, amount);
     }
 
     function _mint(address to, uint256 amount)
         internal
         override(ERC20, ERC20Votes)
     {
-        super._mint(to, amount);
+        return super._mint(to, amount);
     }
 
     function _burn(address account, uint256 amount)
         internal
         override(ERC20, ERC20Votes)
     {
-        super._burn(account, amount);
+        return super._burn(account, amount);
     }
 
     function _maxSupply()
