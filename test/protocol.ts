@@ -4,7 +4,7 @@ import { expect } from "chai";
 import { Signer } from "ethers";
 import { impersonate, mineBlock, setAutomine } from "./utils/hardhatNode";
 import { deploy, fromETHNumber, getContractAt } from "./utils/helpers";
-import { 
+import {
     FluidToken,
     // StakingRewards,
     FluidDAONFT,
@@ -17,19 +17,20 @@ import {
 const setup = async () => {
 
     const initialMintAmount = ethers.utils.parseEther("80");
-    const DAO = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+    // const DAO = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
     // args specific to auctionHouse
     const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
     const WETHWhale = "0x57757E3D981446D585Af0D9Ae4d7DF6D64647806";
     const ROUTER = "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506";
     const timeBuffer = 300;
-    const reservePrice = 10**17; // 0.1 ETH
+    const reservePrice = 10 ** 17; // 0.1 ETH
     const minBidIncrementPercentage = 2;
-    const duration = 60*60*12; // 12 hrs
+    const duration = 60 * 60 * 12; // 12 hrs
 
     let account0: SignerWithAddress;
     let account1: SignerWithAddress;
     let account2: SignerWithAddress;
+    let dao: SignerWithAddress;
     let wethWhale: Signer;
     let fluidERC20: FluidToken;
     let fluidERC721: FluidDAONFT;
@@ -42,11 +43,11 @@ const setup = async () => {
     describe("FLUID DAO Protocol", () => {
 
         before(async () => {
-            [account0, account1, account2] = await ethers.getSigners();
+            [account0, account1, account2, dao] = await ethers.getSigners();
             fluidERC20 = await deploy<FluidToken>(
                 "FluidToken",
                 undefined,
-                account0.address, // DAO
+                dao.address, // DAO
                 account0.address,
                 initialMintAmount
             );
@@ -54,14 +55,14 @@ const setup = async () => {
             royaltyReceiver = await deploy<RoyaltyReceiver>(
                 "RoyaltyReceiver",
                 undefined,
-                DAO,
+                dao.address,
                 stakingRewards
             );
             // fluidERC721 = await deploy<FluidDAONFT>(
             //     "FluidDAONFT",
             //     undefined,
             //     royaltyReceiver.address,
-            //     DAO,
+            //     dao.address,
             //     initialMintAmount
             // );
             // auctionHouse = await deploy<AuctionHouse>(
@@ -79,29 +80,30 @@ const setup = async () => {
 
             // // now that auction house is deployed, set to the erc721
             // await fluidERC721.setAuctionHouse(auctionHouse.address);
-            
+
             // const routerAddr = await fluidERC20.router();
             // router = await getContractAt<IUniswapV2Router02>("IUniswapV2Router02", routerAddr);
             // // pre-load addresses with ETH for future use
             // weth = await getContractAt<ERC20>("ERC20", WETH);
             // wethWhale = await impersonate(WETHWhale);
             // await weth.connect(wethWhale).transfer(account0.address, ethers.utils.parseEther("1000"));
+            // await weth.connect(wethWhale).transfer(royaltyReceiver.address, ethers.utils.parseEther("1000"));
             // // unwrap WETH -> ETH
             // await weth.withdraw(1000);
         });
 
         describe("Fluid Token", () => {
             it("Should have created token", async () => {
-                console.log(fluidERC20.address);
+                expect(fluidERC20.address).to.not.equal(ethers.constants.AddressZero);
             })
             it("Should mint initial amount", async () => {
-                const balance = await fluidERC20.balanceOf(account0.address, {gasLimit: 100000});
+                const balance = await fluidERC20.balanceOf(account0.address, { gasLimit: 100000 });
                 expect(balance).to.equal(initialMintAmount);
             });
-            // it("Should have created the sushi pair", async () => {
-            //     const sushiPair = await fluidERC20.sushiPair();
-            //     expect(sushiPair).to.not.equal(ethers.constants.AddressZero);
-            // });
+            it("Should have created the sushi pair", async () => {
+                const sushiPair = await fluidERC20.sushiPair();
+                expect(sushiPair).to.not.equal(ethers.constants.AddressZero);
+            });
             it("Should accrue fees on transfers", async () => {
                 const halfMinted = initialMintAmount.div(2);
                 await fluidERC20.transfer(account1.address, halfMinted);
@@ -134,14 +136,70 @@ const setup = async () => {
                     0, // slippage is unavoidable
                     account0.address,
                     block.timestamp,
-                    {value: 1000}
+                    { value: 1000 }
                 );
             });
         });
+        describe("RoyaltyReceiver", () => {
+            it("Should distribute royalties accordingly", async () => {
+                const rrWethBalanceBefore = await weth.balanceOf(royaltyReceiver.address);
+                const daoWethBalanceBefore = await weth.balanceOf(dao.address);
+                const callerWethBalanceBefore = await weth.balanceOf(account0.address);
+                const srFluidBalanceBefore = await fluidERC20.balanceOf(stakingRewards.address);
 
+                const functionCallReward = rrWethBalanceBefore.div(100);
+                const halfAfterReward = rrWethBalanceBefore.sub(functionCallReward).div(2);
+
+                await royaltyReceiver.claimRoyalties();
+
+                const rrWethBalanceAfter = await weth.balanceOf(royaltyReceiver.address);
+                const daoWethBalanceAfter = await weth.balanceOf(dao.address);
+                const callerWethBalanceAfter = await weth.balanceOf(account0.address);
+                const srFluidBalanceAfter = await fluidERC20.balanceOf(stakingRewards.address);
+
+                expect(rrWethBalanceAfter).to.equal(0);
+                expect(daoWethBalanceAfter).to.equal(daoWethBalanceBefore.add(halfAfterReward));
+                expect(callerWethBalanceAfter).to.equal(callerWethBalanceBefore.add(functionCallReward));
+                expect(srFluidBalanceAfter).to.be.greaterThan(srFluidBalanceBefore);
+            });
+        });
+        describe("Fluid NFT", () => {
+            it("Should have created NFT", async () => {
+                expect(fluidERC721.address).to.not.equal(ethers.constants.AddressZero);
+            });
+            it("Should mint initial amount", async () => {
+                const balance = await fluidERC721.balanceOf(dao.address);
+                expect(balance).to.equal(initialMintAmount);
+            });
+        });
+        describe("Auction House", () => {
+            it("Should create auction when unpaused", async () => {
+                const tx = await auctionHouse.unpause();
+                const receipt = await tx.wait();
+                const block = await ethers.provider.getBlock(receipt.blockNumber);
+
+                // Expect auction house to now hold one Fluid NFT
+                const balance = await fluidERC721.balanceOf(auctionHouse.address);
+                expect(balance).to.equal(1);
+
+                // Check auction state
+                const auction = await auctionHouse.auction();
+                expect(auction.FluidDAONFTId).to.equal(initialMintAmount.add(1));
+                expect(auction.startTime).to.equal(block.timestamp);
+                expect(auction.endTime).to.equal(block.timestamp + duration);
+
+                // Ensure auction event emitted
+                await expect(tx)
+                    .to.emit(auctionHouse, "AuctionCreated")
+                    .withArgs(initialMintAmount.add(1), auction.startTime, auction.endTime)
+            });
+        });
+        describe("Staking", () => {
+
+        });
     });
 };
 
 setup().then(() => {
-    run();
 });
+run();
