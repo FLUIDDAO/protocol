@@ -15,13 +15,13 @@ contract RoyaltyReceiver is Ownable {
     address public stakingPool;
     address public dao;
     address public weth;
-    IERC20 public fluidToken;
+    address public fluidToken;
     IUniswapV2Router02 public router = IUniswapV2Router02(
         0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
     );
 
     constructor(
-        IERC20 _fluidToken,
+        address _fluidToken,
         address _dao,
         address _stakingPool
     ) {
@@ -45,13 +45,13 @@ contract RoyaltyReceiver is Ownable {
         uint256 half = (balance - functionCallReward)/2;
 
         swapWethForTokens(half);
-        fluidToken.transfer(dao, half);
-        fluidToken.transfer(msg.sender, functionCallReward);
+        IERC20(weth).transfer(dao, half);
+        IERC20(weth).transfer(msg.sender, functionCallReward);
     }
 
     function swapWethForTokens(uint256 amount) private {
         address[] memory path = new address[](2);
-        path[0] = address(fluidToken);
+        path[0] = fluidToken;
         path[1] = weth;
 
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
