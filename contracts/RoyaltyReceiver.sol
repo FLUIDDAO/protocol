@@ -62,4 +62,14 @@ contract RoyaltyReceiver is Ownable {
             block.timestamp
         );
     }
+
+    function recoverERC20(
+        address token,
+        uint256 amount,
+        address recipient
+        ) external onlyOwner {
+        require(token != weth, "Cannot withdraw royalty token");
+        IERC20(token).transfer(recipient, amount);
+        emit Recovered(token, amount);
+    }
 }
