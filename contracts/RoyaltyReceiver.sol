@@ -40,7 +40,7 @@ contract RoyaltyReceiver is Ownable {
     /// @dev Swaps half the royalties to FLUID and sends to stakers
     function claimRoyalties() external {
         // divide rewards by two - distribute 
-        uint256 balance = IERC20(fluidToken).balanceOf(address(this));
+        uint256 balance = IERC20(weth).balanceOf(address(this));
         uint256 functionCallReward = balance/100; // 1% reward to caller
         uint256 half = (balance - functionCallReward)/2;
 
