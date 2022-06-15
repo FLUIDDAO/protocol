@@ -6,6 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IWETH} from "./interfaces/IWETH.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IAuctionHouse} from "./interfaces/IAuctionHouse.sol";
 import {IFluidToken} from "./interfaces/IFluidToken.sol";
 import {IFluidDAONFT} from "./interfaces/IFluidDAONFT.sol";
@@ -14,7 +15,13 @@ import {IFluidDAONFT} from "./interfaces/IFluidDAONFT.sol";
 /// @title Fluid DAO Auction House
 /// @author @cartercarlson
 /// @notice Fluid DAO auction contract to sell the Fluid DAO NFT.
-contract AuctionHouse is Pausable, ReentrancyGuard, Ownable, IAuctionHouse {
+contract AuctionHouse is
+    Pausable,
+    ReentrancyGuard,
+    Ownable,
+    IAuctionHouse,
+    IERC721Receiver
+{
 
     // The ERC721 token contract
     IFluidDAONFT public fluidDAONFT;
@@ -270,5 +277,23 @@ contract AuctionHouse is Pausable, ReentrancyGuard, Ownable, IAuctionHouse {
     {
         (bool success, ) = to.call{value: value, gas: 30_000}(new bytes(0));
         return success;
+    }
+
+    // https://github.com/nibbstack/erc721/blob/master/src/tests/mocks/nf-token-receiver-test-mock.sol
+    function onERC721Received(
+        address _operator,
+        address _from,
+        uint256 _tokenId,
+        bytes calldata _data
+    )
+        external
+        override
+        returns(bytes4)
+    {
+        _operator;
+        _from;
+        _tokenId;
+        _data;
+        return 0x150b7a02;
     }
 }
