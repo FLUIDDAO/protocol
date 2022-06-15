@@ -13,6 +13,7 @@ import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
 
 // TODO: will we ever expect DAO to change?
+// TODO: Do we need the whitelist of addresses that can transfer w/o fees?
 contract FluidToken is
     IFluidToken,
     ERC20Permit,
