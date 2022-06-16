@@ -136,4 +136,8 @@ contract FluidDAONFT is ERC721A, ERC2981, Ownable, ReentrancyGuard {
         _resetTokenRoyalty(tokenId);
     }
 
+    // https://github.com/chiru-labs/ERC721A/blob/534dd35c733b749b2888d28af24defccc7b45e6f/contracts/ERC721A.sol#L122
+    function _startTokenId() internal view override returns (uint256) {
+        return 1;
+    }
 }
