@@ -198,7 +198,7 @@ contract AuctionHouse is
         if (nextTokenId % 10 == 0) {
             fluidDAONFT.mint(dao);
 
-            // lower rewards every hundred minted by 10%
+            // lower rewards every two hundred minted by 10%
             if (nextTokenId % 200 == 0) {
                 rewardAmount -= (rewardAmount / 10);
             }
