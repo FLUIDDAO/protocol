@@ -51,8 +51,8 @@ contract RoyaltyReceiver is Ownable {
 
     function swapWethForTokens(uint256 amount) private {
         address[] memory path = new address[](2);
-        path[0] = fluidToken;
-        path[1] = weth;
+        path[0] = weth;
+        path[1] = fluidToken;
 
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             amount,
