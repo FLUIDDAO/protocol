@@ -110,7 +110,6 @@ contract FluidToken is
         // Transfer fees and provide LP
         super._transfer(address(this), DEAD_ADDRESS, amount);
         super._transfer(address(this), dao, amount);
-        // TODO: this transfer should be addToAllocation func for staking pool
         super._transfer(address(this), stakingPool, amount);
         if (swapAndLiquifyEnabled) {
             swapAndLiquify(amount);
