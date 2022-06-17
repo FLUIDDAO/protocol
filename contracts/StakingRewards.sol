@@ -22,6 +22,7 @@ contract StakingRewards is Ownable, ReentrancyGuard {
     event Staked(address indexed user, uint256 amount);
     event Withdrawn(address indexed user, uint256 amount);
     event RewardPaid(address indexed user, uint256 reward);
+    event RewardRateUpdated(uint256 rate);
 
     modifier updateReward(address account) {
         rewardPerTokenStored = rewardPerToken();
@@ -40,11 +41,11 @@ contract StakingRewards is Ownable, ReentrancyGuard {
         // TODO: require reward rate only changes by X % at a time?
         require(_rewardRate != rewardRate, "_rewardRate == rewardRate");
         rewardRate = _rewardRate;
+        emit RewardRateUpdated(_rewardRate);
     }
 
     function stake(uint _amount) public updateReward(msg.sender) nonReentrant {
         require(_amount > 0, "Cannot deposit 0");
-        require(token.balanceOf(msg.sender) >= _amount, "Not enough to stake");
         _totalSupply += _amount;
         _balances[msg.sender] += _amount;
         token.transferFrom(msg.sender, address(this), _amount);
@@ -53,7 +54,6 @@ contract StakingRewards is Ownable, ReentrancyGuard {
 
     function withdraw(uint _amount) public updateReward(msg.sender) nonReentrant {
         require(_amount > 0, "Cannot withdraw 0");
-        require(_amount >= _balances[msg.sender], "Not enough staked");
         _totalSupply -= _amount;
         _balances[msg.sender] -= _amount;
         token.transfer(msg.sender, _amount);
