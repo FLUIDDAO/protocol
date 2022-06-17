@@ -102,7 +102,7 @@ const setup = async () => {
       await weth.withdraw(500, overrides);
 
       // approval
-      await fluidERC20.approve(router.address, ethers.constants.MaxUint256);
+      await fluidERC20.connect(dao).approve(router.address, ethers.constants.MaxUint256);
     });
 
     beforeEach(async () => {
@@ -118,7 +118,7 @@ const setup = async () => {
         expect(fluidERC20.address).to.not.equal(ethers.constants.AddressZero);
       })
       it("Should mint initial amount", async () => {
-        const balance = await fluidERC20.balanceOf(deployer.address, overrides);
+        const balance = await fluidERC20.balanceOf(dao.address, overrides);
         expect(balance).to.equal(initialMintAmountInEth);
       });
       it("Should have created the sushi pair", async () => {
@@ -127,10 +127,10 @@ const setup = async () => {
       });
       it("Should accrue fees on transfers", async () => {
         const halfMinted = initialMintAmountInEth.div(2);
-        await fluidERC20.transfer(account1.address, halfMinted, overrides);
+        await fluidERC20.connect(dao).transfer(account1.address, halfMinted, overrides);
         let fee1 = halfMinted.div(250);
         let receivedAmt1 = halfMinted.sub(fee1);
-        let balance0 = await fluidERC20.balanceOf(deployer.address);
+        let balance0 = await fluidERC20.balanceOf(dao.address);
         let balance1 = await fluidERC20.balanceOf(account1.address);
         expect(balance0).to.equal(halfMinted);
         expect(balance1).to.equal(receivedAmt1);
@@ -149,12 +149,12 @@ const setup = async () => {
         const amountDepositFLUID = 40;
         const block = await ethers.provider.getBlock("latest");
 
-        await router.addLiquidityETH(
+        await router.connect(dao).addLiquidityETH(
           fluidERC20.address,
           amountDepositFLUID,
           0, // slippage is unavoidable
           0, // slippage is unavoidable
-          deployer.address,
+          dao.address,
           block.timestamp + 100,
           { value: amountDepositETH, gasLimit: 1000000 }
         );
@@ -215,6 +215,7 @@ const setup = async () => {
           .to.emit(auctionHouse, "AuctionCreated")
           .withArgs(initialMintAmount + 1, auction.startTime, auction.endTime)
       });
+
       it("Should revert if a user creates a bid for an inactive auction", async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
@@ -225,6 +226,64 @@ const setup = async () => {
         );
         await expect(tx).to.be.revertedWith("Fluid not up for auction")
       });
+
+      it('Should revert if a user creates a bid for an expired auction', async () => {
+        await (await auctionHouse.unpause()).wait();
+
+        await ethers.provider.send('evm_increaseTime', [60 * 60 * 25]); // Add 25 hours
+
+        const { fluidDAONFTId } = await auctionHouse.auction();
+        const tx = auctionHouse.connect(account1).createBid(fluidDAONFTId, {
+          value: RESERVE_PRICE,
+        });
+
+        await expect(tx).to.be.revertedWith('Auction expired');
+      });
+
+      it('Should revert if a user creates a bid with an amount below the reserve price', async () => {
+        await (await auctionHouse.unpause()).wait();
+
+        const { fluidDAONFTId } = await auctionHouse.auction();
+        const tx = auctionHouse.connect(account1).createBid(fluidDAONFTId, {
+          value: RESERVE_PRICE.sub(1),
+        });
+
+        await expect(tx).to.be.revertedWith('Must send at least reservePrice');
+      });
+
+      it('Should revert if a user creates a bid less than the min bid increment percentage', async () => {
+        await (await auctionHouse.unpause()).wait();
+
+        const { fluidDAONFTId } = await auctionHouse.auction();
+        await auctionHouse.connect(account1).createBid(fluidDAONFTId, {
+          value: RESERVE_PRICE.mul(100),
+        });
+        const tx = auctionHouse.connect(account2).createBid(fluidDAONFTId, {
+          value: RESERVE_PRICE.mul(101),
+        });
+
+        await expect(tx).to.be.revertedWith(
+          'Must send more than last bid by minBidIncrementPercentage amount',
+        );
+      });
+
+      it('Should refund the previous bidder when the following user creates a bid', async () => {
+        await (await auctionHouse.unpause()).wait();
+
+        const { fluidDAONFTId } = await auctionHouse.auction();
+        await auctionHouse.connect(account1).createBid(fluidDAONFTId, {
+          value: RESERVE_PRICE,
+        });
+
+        const account1PostBidBalance = await account1.getBalance();
+        await auctionHouse.connect(account2).createBid(fluidDAONFTId, {
+          value: RESERVE_PRICE.mul(2),
+        });
+        const account1PostRefundBalance = await account1.getBalance();
+
+        expect(account1PostRefundBalance).to.equal(account1PostBidBalance.add(RESERVE_PRICE));
+      });
+
       it('Should burn a fluidDAONFT on auction settlement if no bids are received', async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
@@ -238,6 +297,7 @@ const setup = async () => {
           .to.emit(auctionHouse, 'AuctionSettled')
           .withArgs(fluidDAONFTId, '0x0000000000000000000000000000000000000000', 0);
       });
+
       it('Should emit an `AuctionBid` event on a successful bid', async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
