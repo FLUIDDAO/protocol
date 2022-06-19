@@ -24,6 +24,7 @@ const setup = async () => {
   const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
   const WETHWhale = "0x57757E3D981446D585Af0D9Ae4d7DF6D64647806";
   const ROUTER = "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506";
+  const DEAD_ADDRESS = "0x000000000000000000000000000000000000dEaD";
   const RESERVE_PRICE = fromETHNumber(0.1); // 0.1 ETH
   const TIME_BUFFER = 300;
   const MIN_BID_INCREMENT_PERCENTAGE = 2;
@@ -41,6 +42,7 @@ const setup = async () => {
   let auctionHouse: AuctionHouse;
   let royaltyReceiver: RoyaltyReceiver;
   let weth: IWETH;
+  let sushiPair: ERC20;
   let router: IUniswapV2Router02;
   let snapshotId: number;
 
@@ -87,9 +89,12 @@ const setup = async () => {
         DURATION
       );
 
+      sushiPair = await getContractAt<ERC20>("ERC20", await fluidERC20.sushiPair());
+
       // now that auction house is deployed, set to the erc721
       await fluidERC721.setAuctionHouse(auctionHouse.address, overrides);
-      await fluidERC20.setAuctionHouse(auctionHouse.address, overrides)
+      await fluidERC20.setAuctionHouse(auctionHouse.address, overrides);
+      await fluidERC20.setStakingPool(stakingRewards.address, overrides);
 
       const routerAddr = await fluidERC20.router();
       router = await getContractAt<IUniswapV2Router02>("IUniswapV2Router02", routerAddr);
@@ -97,12 +102,15 @@ const setup = async () => {
       weth = await getContractAt<IWETH>("IWETH", WETH);
       wethWhale = await impersonate(WETHWhale);
       await weth.connect(wethWhale).transfer(deployer.address, fromETHNumber(1000), overrides);
-      await weth.connect(wethWhale).transfer(royaltyReceiver.address, fromETHNumber(1000), overrides);
+      // await weth.connect(wethWhale).transfer(royaltyReceiver.address, fromETHNumber(1000), overrides);
       // unwrap WETH -> ETH
       await weth.withdraw(500, overrides);
 
       // approval
       await fluidERC20.connect(dao).approve(router.address, ethers.constants.MaxUint256);
+      await fluidERC20.connect(dao).approve(sushiPair.address, ethers.constants.MaxInt256)
+      await weth.connect(dao).approve(router.address, ethers.constants.MaxUint256);
+      await weth.connect(dao).approve(sushiPair.address, ethers.constants.MaxUint256);
     });
 
     beforeEach(async () => {
@@ -122,8 +130,7 @@ const setup = async () => {
         expect(balance).to.equal(initialMintAmountInEth);
       });
       it("Should have created the sushi pair", async () => {
-        const sushiPair = await fluidERC20.sushiPair();
-        expect(sushiPair).to.not.equal(ethers.constants.AddressZero);
+        expect(sushiPair.address).to.not.equal(ethers.constants.AddressZero);
       });
       it("Should accrue fees on transfers", async () => {
         const halfMinted = initialMintAmountInEth.div(2);
@@ -151,29 +158,67 @@ const setup = async () => {
 
         await router.connect(dao).addLiquidityETH(
           fluidERC20.address,
-          amountDepositFLUID,
+          fromETHNumber(amountDepositFLUID),
           0, // slippage is unavoidable
           0, // slippage is unavoidable
           dao.address,
           block.timestamp + 100,
-          { value: amountDepositETH, gasLimit: 1000000 }
+          { value: fromETHNumber(amountDepositETH), gasLimit: 1000000 }
         );
 
-        //
+        // Fees should have accrued on LP
+        const fluidFluidBalanceBefore = await fluidERC20.balanceOf(fluidERC20.address);
+        const daoFluidBalanceBefore = await fluidERC20.balanceOf(dao.address);
+        expect(fluidFluidBalanceBefore).to.equal(fromETHNumber(amountDepositFLUID / 250));
+        expect(await sushiPair.balanceOf(fluidERC20.address)).to.equal(0);
+        
+        let reward = fluidFluidBalanceBefore.div(100);
+        let amount = fluidFluidBalanceBefore.sub(reward).div(4);
+
+        await fluidERC20.connect(account1).distributeFees(overrides);
+
+        expect(await fluidERC20.balanceOf(account1.address)).to.equal(reward);
+        expect(await fluidERC20.balanceOf(DEAD_ADDRESS)).to.equal(amount);
+        expect(
+          (await fluidERC20.balanceOf(dao.address)).sub(daoFluidBalanceBefore)
+        ).to.equal(amount);
+        expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(amount);
+        expect(await sushiPair.balanceOf(fluidERC20.address)).to.be.gt(0);
       });
     });
     describe("RoyaltyReceiver", () => {
       it("Should distribute royalties accordingly", async () => {
+
+        // Let's say we have 1 WETH in royalties accrued
+        await weth.connect(wethWhale).transfer(royaltyReceiver.address, fromETHNumber(1), overrides);
+        console.log(`Simulating royalties "earned" of 1 WETH `)
+
+        // We'll first need to add liquidity to the pool so distributing fees can trade
+        // Let's say 1 FLUID = 3 ETH
+        const amountDepositETH = 120;
+        const amountDepositFLUID = 40;
+        const block = await ethers.provider.getBlock("latest");
+        console.log(`Initial liquidity added: 120 ETH, 40 FLUID (so 3 ETH/FLUID)`);
+
+        await router.connect(dao).addLiquidityETH(
+          fluidERC20.address,
+          fromETHNumber(amountDepositFLUID),
+          0, // slippage is unavoidable
+          0, // slippage is unavoidable
+          dao.address,
+          block.timestamp + 100,
+          { value: fromETHNumber(amountDepositETH), gasLimit: 1000000 }
+        );
+    
         const rrWethBalanceBefore = await weth.balanceOf(royaltyReceiver.address);
         const daoWethBalanceBefore = await weth.balanceOf(dao.address);
         const callerWethBalanceBefore = await weth.balanceOf(account1.address);
         const srFluidBalanceBefore = await fluidERC20.balanceOf(stakingRewards.address);
 
-        // console.log(rrWethBalanceBefore);
-        // const functionCallReward = rrWethBalanceBefore.div(100);
-        // const halfAfterReward = rrWethBalanceBefore.sub(functionCallReward).div(2);
+        const functionCallReward = rrWethBalanceBefore.div(100);
+        const halfAfterReward = rrWethBalanceBefore.sub(functionCallReward).div(2);
 
-        await royaltyReceiver.claimRoyalties(overrides);
+        await royaltyReceiver.connect(account1).claimRoyalties(overrides);
 
         const rrWethBalanceAfter = await weth.balanceOf(royaltyReceiver.address);
         const daoWethBalanceAfter = await weth.balanceOf(dao.address);
@@ -181,9 +226,10 @@ const setup = async () => {
         const srFluidBalanceAfter = await fluidERC20.balanceOf(stakingRewards.address);
 
         expect(rrWethBalanceAfter).to.equal(0);
-        // expect(daoWethBalanceAfter).to.equal(daoWethBalanceBefore.add(halfAfterReward));
-        // expect(callerWethBalanceAfter).to.equal(callerWethBalanceBefore.add(functionCallReward));
-        // expect(srFluidBalanceAfter).to.be.greaterThan(srFluidBalanceBefore);
+        expect(daoWethBalanceAfter).to.equal(daoWethBalanceBefore.add(halfAfterReward));
+        expect(callerWethBalanceAfter).to.equal(callerWethBalanceBefore.add(functionCallReward));
+        expect(srFluidBalanceAfter).to.be.gt(srFluidBalanceBefore);
+        console.log(`Rate of ETH/FLUID in royalty swap: ${halfAfterReward.mul(100).div(srFluidBalanceAfter).toNumber() / 100}`);
       });
     });
     describe("Fluid NFT", () => {
