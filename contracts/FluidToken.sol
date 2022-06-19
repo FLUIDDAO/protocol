@@ -2,7 +2,7 @@
 pragma solidity 0.8.12;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/draft-ERC20Permit.sol";
 import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import {ERC20VotesComp} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20VotesComp.sol";
@@ -54,6 +54,9 @@ contract FluidToken is
         IUniswapV2Router02 _router = IUniswapV2Router02(
             0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
         );
+        // approve router spending
+        IERC20(_router.WETH()).approve(address(_router), type(uint256).max);
+
         // Create a uniswap pair for this new token
         sushiPair = IUniswapV2Factory(_router.factory())
             .createPair(address(this), _router.WETH());
@@ -176,7 +179,6 @@ contract FluidToken is
     }
 
     function addLiquidity(uint256 tokenAmount, uint256 ethAmount) private {
-        // approve token transfer to cover all possible scenarios
         _approve(address(this), address(router), tokenAmount);
 
         // add the liquidity
@@ -185,7 +187,7 @@ contract FluidToken is
             tokenAmount,
             0, // slippage is unavoidable
             0, // slippage is unavoidable
-            owner(),
+            address(this),
             block.timestamp
         );
     }
