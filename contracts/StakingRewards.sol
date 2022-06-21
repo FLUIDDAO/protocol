@@ -46,10 +46,13 @@ contract StakingRewards is Ownable, ReentrancyGuard {
 
     function stake(uint _amount) public updateReward(msg.sender) nonReentrant {
         require(_amount > 0, "Cannot deposit 0");
-        _totalSupply += _amount;
-        _balances[msg.sender] += _amount;
+        require(token.balanceOf(msg.sender) >= _amount, "Not enough");
+        // only increment by amount after fees
+        uint256 amountAfterFee = _amount - _amount/250;
+        _totalSupply += amountAfterFee;
+        _balances[msg.sender] += amountAfterFee;
         token.transferFrom(msg.sender, address(this), _amount);
-        emit Staked(msg.sender, _amount);
+        emit Staked(msg.sender, amountAfterFee);
     }
 
     function withdraw(uint _amount) public updateReward(msg.sender) nonReentrant {
@@ -57,7 +60,8 @@ contract StakingRewards is Ownable, ReentrancyGuard {
         _totalSupply -= _amount;
         _balances[msg.sender] -= _amount;
         token.transfer(msg.sender, _amount);
-        emit Withdrawn(msg.sender, _amount);
+        uint256 amountAfterFee = _amount - _amount/250;
+        emit Withdrawn(msg.sender, amountAfterFee);
     }
 
     function getReward() public updateReward(msg.sender) {
