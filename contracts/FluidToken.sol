@@ -23,8 +23,6 @@ contract FluidToken is
     ReentrancyGuard
 {
     address public dao;
-    address public constant DEAD_ADDRESS =
-        0x000000000000000000000000000000000000dEaD;
     mapping(address => bool) public whitelistedAddress;
 
     IUniswapV2Router02 public router;
@@ -110,7 +108,7 @@ contract FluidToken is
         // Reward the caller
         super._transfer(address(this), msg.sender, reward);
         // Transfer fees and provide LP
-        super._transfer(address(this), DEAD_ADDRESS, amount);
+        _burn(address(this), amount);
         super._transfer(address(this), dao, amount);
         super._transfer(address(this), stakingPool, amount);
         if (swapAndLiquifyEnabled) {

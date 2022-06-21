@@ -24,7 +24,6 @@ const setup = async () => {
   const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
   const WETHWhale = "0x57757E3D981446D585Af0D9Ae4d7DF6D64647806";
   const ROUTER = "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506";
-  const DEAD_ADDRESS = "0x000000000000000000000000000000000000dEaD";
   const RESERVE_PRICE = fromETHNumber(0.1); // 0.1 ETH
   const TIME_BUFFER = 300;
   const MIN_BID_INCREMENT_PERCENTAGE = 2;
@@ -167,6 +166,7 @@ const setup = async () => {
         );
 
         // Fees should have accrued on LP
+        const totalSupplyBefore = await fluidERC20.totalSupply();
         const fluidFluidBalanceBefore = await fluidERC20.balanceOf(fluidERC20.address);
         const daoFluidBalanceBefore = await fluidERC20.balanceOf(dao.address);
         expect(fluidFluidBalanceBefore).to.equal(fromETHNumber(amountDepositFLUID / 250));
@@ -177,8 +177,8 @@ const setup = async () => {
 
         await fluidERC20.connect(account1).distributeFees(overrides);
 
+        expect((await fluidERC20.totalSupply()).add(amount)).to.equal(totalSupplyBefore);
         expect(await fluidERC20.balanceOf(account1.address)).to.equal(reward);
-        expect(await fluidERC20.balanceOf(DEAD_ADDRESS)).to.equal(amount);
         expect(
           (await fluidERC20.balanceOf(dao.address)).sub(daoFluidBalanceBefore)
         ).to.equal(amount);
