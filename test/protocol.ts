@@ -187,6 +187,7 @@ const setup = async () => {
         expect(await sushiPair.balanceOf(fluidERC20.address)).to.be.gt(0);
       });
     });
+
     describe("RoyaltyReceiver", () => {
       it("Should distribute royalties accordingly", async () => {
 
@@ -233,6 +234,7 @@ const setup = async () => {
         console.log(`Rate of ETH/FLUID in royalty swap: ${halfAfterReward.mul(100).div(srFluidBalanceAfter).toNumber() / 100}`);
       });
     });
+
     describe("Fluid NFT", () => {
       it("Should have created NFT", async () => {
         expect(fluidERC721.address).to.not.equal(ethers.constants.AddressZero);
@@ -244,6 +246,7 @@ const setup = async () => {
         expect(supply).to.equal(balance);
       });
     });
+
     describe("Auction House", () => {
       it("Should create auction when unpaused", async () => {
         const tx = await auctionHouse.unpause(overrides);
@@ -484,6 +487,7 @@ const setup = async () => {
         expect(acc2TokenBalance).to.equal(fromETHNumber(0.9));
       });
     });
+
     describe("Staking Rewards", () => {
       it("Should be able to update reward rate", async () =>  {
         expect(await stakingRewards.rewardRate()).to.equal(100);
@@ -529,33 +533,75 @@ const setup = async () => {
         ).to.be.revertedWith("reward would draw from locked supply");
       });
       it("Should succeed in getReward()", async () => {
-        const dayInSceonds = 60*60 * 24;
-        const rewardInDay = dayInSceonds * 100; // as rewardRate is 100
+        const dayInSeconds = 60*60 * 24;
+        const rewardInDay = dayInSeconds * 100; // as rewardRate is 100
         const rewardAfterFee = rewardInDay - (rewardInDay / 250);
         const amount = initialMintAmountInEth.div(4);
-        const amountAfterFee = amount.mul(249).div(250);
+        const amountAfterFee = amount.sub(amount.div(250));
         // pre-fund staking contract to give rewards
         await fluidERC20.connect(dao).transfer(stakingRewards.address, amount, overrides);
 
         let tx = await stakingRewards.connect(dao).stake(amount, overrides);
-        const txBlockTime = (
+        let txBlockTime = (
           await ethers.provider.getBlock((await tx.wait()).blockNumber)
         ).timestamp;
-        await setNextBlockTimestamp(txBlockTime + dayInSceonds);
         
-        await stakingRewards.connect(dao).getReward(overrides);
+        await setNextBlockTimestamp(txBlockTime + dayInSeconds);
         
+        tx = await stakingRewards.connect(dao).getReward(overrides);
+        let newTxBlockTime = (
+          await ethers.provider.getBlock((await tx.wait()).blockNumber)
+        ).timestamp;
+        expect(newTxBlockTime).to.equal(txBlockTime + dayInSeconds);
+
         // balance of pool should be staked + prefund (amount*2) - reward claimed
         expect(
-          await fluidERC20.balanceOf(stakingRewards.address)
-        ).to.equal(amountAfterFee.mul(2).sub(rewardInDay));
+          toETHNumber(await fluidERC20.balanceOf(stakingRewards.address))
+        ).to.equal(
+          toETHNumber(amountAfterFee.mul(2).sub(rewardInDay))
+        );
 
         // dao has sent half of fluid to rewards contract (25% as stake, 25% as rewards)
         expect(
-          initialMintAmountInEth.div(2).add(rewardAfterFee)
-          ).to.be.approximately(
-          await fluidERC20.balanceOf(dao.address),
-          1e15
+          toETHNumber(initialMintAmountInEth.div(2).add(rewardAfterFee))
+          ).to.equal(
+          toETHNumber(await fluidERC20.balanceOf(dao.address))
+        );
+      });
+      it("Should succeed in exit()", async () => {
+        const dayInSeconds = 60 * 60 * 24;
+        const rewardInDay = dayInSeconds * 100; // as rewardRate is 100
+        const rewardAfterFee = rewardInDay - (rewardInDay / 250);
+        const amount = initialMintAmountInEth.div(4);
+        const amountAfterFee = amount.sub(amount.div(250));
+        // pre-fund staking contract to give rewards
+        await fluidERC20.connect(dao).transfer(stakingRewards.address, amount, overrides);
+
+        let tx = await stakingRewards.connect(dao).stake(amount, overrides);
+        let txBlockTime = (
+          await ethers.provider.getBlock((await tx.wait()).blockNumber)
+        ).timestamp;
+
+        await setNextBlockTimestamp(txBlockTime + dayInSeconds);
+
+        tx = await stakingRewards.connect(dao).exit(overrides);
+
+        // balance of pool should be prefund amount - reward claimed
+        // NOTE: need to round from 10**18 precision
+        expect(
+          toETHNumber(await fluidERC20.balanceOf(stakingRewards.address))
+        ).to.be.closeTo(
+          toETHNumber(amountAfterFee.sub(rewardInDay)),
+          1e-18
+        );
+
+        // dao has claimed back their stake, which accrues a fee on amountAfterFee
+        // Since they deposited 50% of total balance, add back amount deposited but include another fee
+        const amountAfterFeeWithdrawal = amountAfterFee.sub(amountAfterFee.div(250));
+        expect(
+          toETHNumber(initialMintAmountInEth.div(2).add(rewardAfterFee).add(amountAfterFeeWithdrawal))
+          ).to.equal(
+          toETHNumber(await fluidERC20.balanceOf(dao.address))
         );
       });
     });
