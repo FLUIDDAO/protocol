@@ -11,6 +11,7 @@ import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 import {IFluidToken} from "./interfaces/IFluidToken.sol";
 import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
+import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 
 // TODO: will we ever expect DAO to change?
 // TODO: Do we need the whitelist of addresses that can transfer w/o fees?
@@ -22,24 +23,29 @@ contract FluidToken is
     Ownable,
     ReentrancyGuard
 {
-    address public dao;
-    mapping(address => bool) public whitelistedAddress;
-
-    IUniswapV2Router02 public router;
-    address public sushiPair;
+    bool public swapAndLiquifyEnabled = true;
+    uint256 public slippageAllowance;
+    uint256 public constant SLIPPAGE_MAX = 10000;
     address public stakingPool;
     address public auctionHouse;
+    address public dao;
+    IUniswapV2Pair public sushiPair;
+    // https://dev.sushi.com/docs/Developers/Deployment%20Addresses
+    IUniswapV2Router02 public router = IUniswapV2Router02(
+        0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
+    );
 
-    bool public swapAndLiquifyEnabled = true;
+    mapping(address => bool) public whitelistedAddress;
 
     event SetWhitelistAddress(address whitelistAccount, bool value);
     event SetSwapAndLiquifyEnabled(bool enabled);
     event SetStakingPool(address _stakingPool);
     event SetAuctionHouse(address _auctionHouse);
+    event SetSlippageAllowance(uint256 _slippageAllowance);
     event SwapAndLiquify(
         uint256 tokensSwapped,
         uint256 ethReceived,
-        uint256 tokensIntoLiqudity
+        uint256 tokensIntoLiquidity
     );
 
     constructor(
@@ -48,20 +54,17 @@ contract FluidToken is
         uint256 initialSupply
     ) ERC20("Fluid DAO", "FLD") ERC20Permit("Fluid DAO")
     {
-        // SushiV2Router02 address. It comes from https://dev.sushi.com/sushiswap/contracts
-        IUniswapV2Router02 _router = IUniswapV2Router02(
-            0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
-        );
         // approve router spending
-        IERC20(_router.WETH()).approve(address(_router), type(uint256).max);
+        IERC20(router.WETH()).approve(address(router), type(uint256).max);
 
         // Create a uniswap pair for this new token
-        sushiPair = IUniswapV2Factory(_router.factory())
-            .createPair(address(this), _router.WETH());
+        address pair = IUniswapV2Factory(router.factory())
+            .createPair(address(this), router.WETH());
+        sushiPair = IUniswapV2Pair(pair);
 
         // set the rest of the contract variables
-        router = _router;
         dao = _dao;
+        slippageAllowance = 500;
 
         _mint(initialHolder, initialSupply);
     }
@@ -93,6 +96,13 @@ contract FluidToken is
     function setStakingPool(address _stakingPool) external onlyOwner {
         stakingPool = _stakingPool;
         emit SetStakingPool(_stakingPool);
+    }
+
+    function setSlippageAllowance(uint256 _slippageAllowance) external onlyOwner {
+        require(_slippageAllowance != slippageAllowance, "_slippageAllowance == slippageAllowance");
+        require(_slippageAllowance <= SLIPPAGE_MAX, "Cannot set slippage above 100%");
+        slippageAllowance = _slippageAllowance;
+        emit SetSlippageAllowance(_slippageAllowance);
     }
 
     /// @notice Rewardable function to distrubute fees
@@ -166,10 +176,14 @@ contract FluidToken is
 
         _approve(address(this), address(router), tokenAmount);
 
+        (uint256 reserveFluid, uint256 reserveWeth, ) = sushiPair.getReserves();
+        uint256 spotPrice = router.quote(tokenAmount, reserveFluid, reserveWeth);
+        uint256 minToReturn = spotPrice * (SLIPPAGE_MAX - slippageAllowance) / SLIPPAGE_MAX;
+        
         // make the swap
         router.swapExactTokensForETHSupportingFeeOnTransferTokens(
             tokenAmount,
-            0, // accept any amount of ETH
+            minToReturn,
             path,
             address(this),
             block.timestamp
@@ -183,8 +197,8 @@ contract FluidToken is
         router.addLiquidityETH{value: ethAmount}(
             address(this),
             tokenAmount,
-            0, // slippage is unavoidable
-            0, // slippage is unavoidable
+            0,
+            0,
             address(this),
             block.timestamp
         );

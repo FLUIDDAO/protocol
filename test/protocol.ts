@@ -10,8 +10,8 @@ import {
   FluidDAONFT,
   AuctionHouse,
   RoyaltyReceiver,
-  ERC20,
   IWETH,
+  IUniswapV2Pair,
   IUniswapV2Router02
 } from "../artifacts/types";
 
@@ -29,6 +29,10 @@ const setup = async () => {
   const MIN_BID_INCREMENT_PERCENTAGE = 2;
   const DURATION = 60 * 60 * 12; // 12 hrs
   const overrides = {gasLimit: 1000000}
+  // Amounts for providing initial liquidity
+  // Let's say 1 FLUID = 3 ETH
+  const amountDepositETH = 120;
+  const amountDepositFLUID = 40;
 
   let deployer: SignerWithAddress;
   let account1: SignerWithAddress;
@@ -41,7 +45,7 @@ const setup = async () => {
   let auctionHouse: AuctionHouse;
   let royaltyReceiver: RoyaltyReceiver;
   let weth: IWETH;
-  let sushiPair: ERC20;
+  let sushiPair: IUniswapV2Pair;
   let router: IUniswapV2Router02;
   let snapshotId: number;
 
@@ -56,6 +60,8 @@ const setup = async () => {
         dao.address,
         initialMintAmountInEth
       );
+      sushiPair = await getContractAt<IUniswapV2Pair>("IUniswapV2Pair", await fluidERC20.sushiPair());
+
       stakingRewards = await deploy<StakingRewards>(
         "StakingRewards",
         undefined,
@@ -66,7 +72,8 @@ const setup = async () => {
         undefined,
         fluidERC20.address,
         dao.address,
-        stakingRewards.address
+        stakingRewards.address,
+        sushiPair.address
       );
       fluidERC721 = await deploy<FluidDAONFT>(
         "FluidDAONFT",
@@ -88,7 +95,6 @@ const setup = async () => {
         DURATION
       );
 
-      sushiPair = await getContractAt<ERC20>("ERC20", await fluidERC20.sushiPair());
 
       // now that auction house is deployed, set to the erc721
       await fluidERC721.setAuctionHouse(auctionHouse.address, overrides);
@@ -149,18 +155,34 @@ const setup = async () => {
         expect(balance1).to.equal(0);
         expect(balance2).to.equal(receivedAmt2);
       });
-      it("Should distribute fees accordingly", async () => {
-        // We'll first need to add liquidity to the pool so distributing fees can trade
-        // Let's say 1 FLUID = 3 ETH
-        const amountDepositETH = 120;
-        const amountDepositFLUID = 40;
+      it("Should revert if setting slippage above 100%", async () => {
+        const tx = fluidERC20.connect(deployer).setSlippageAllowance(10001);
+        await expect(tx).to.be.revertedWith("Cannot set slippage above 100%");
+      });
+      it("Should revert on distributeFees() if slippage exceeds allowance", async () => {
+        
         const block = await ethers.provider.getBlock("latest");
-
         await router.connect(dao).addLiquidityETH(
           fluidERC20.address,
           fromETHNumber(amountDepositFLUID),
-          0, // slippage is unavoidable
-          0, // slippage is unavoidable
+          0,
+          0,
+          dao.address,
+          block.timestamp + 100,
+          { value: fromETHNumber(amountDepositETH), gasLimit: 1000000 }
+        );
+        await fluidERC20.setSlippageAllowance(0, overrides);
+        const tx = fluidERC20.connect(account1).distributeFees(overrides);
+        await expect(tx).to.be.revertedWith("UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT");
+      });
+      it("Should succeed in distributeFees()", async () => {
+
+        const block = await ethers.provider.getBlock("latest");
+        await router.connect(dao).addLiquidityETH(
+          fluidERC20.address,
+          fromETHNumber(amountDepositFLUID),
+          0,
+          0,
           dao.address,
           block.timestamp + 100,
           { value: fromETHNumber(amountDepositETH), gasLimit: 1000000 }
@@ -193,20 +215,14 @@ const setup = async () => {
 
         // Let's say we have 1 WETH in royalties accrued
         await weth.connect(wethWhale).transfer(royaltyReceiver.address, fromETHNumber(1), overrides);
-        console.log(`Simulating royalties "earned" of 1 WETH `)
 
         // We'll first need to add liquidity to the pool so distributing fees can trade
-        // Let's say 1 FLUID = 3 ETH
-        const amountDepositETH = 120;
-        const amountDepositFLUID = 40;
         const block = await ethers.provider.getBlock("latest");
-        console.log(`Initial liquidity added: 120 ETH, 40 FLUID (so 3 ETH/FLUID)`);
-
         await router.connect(dao).addLiquidityETH(
           fluidERC20.address,
           fromETHNumber(amountDepositFLUID),
-          0, // slippage is unavoidable
-          0, // slippage is unavoidable
+          0,
+          0,
           dao.address,
           block.timestamp + 100,
           { value: fromETHNumber(amountDepositETH), gasLimit: 1000000 }
@@ -231,7 +247,6 @@ const setup = async () => {
         expect(daoWethBalanceAfter).to.equal(daoWethBalanceBefore.add(halfAfterReward));
         expect(callerWethBalanceAfter).to.equal(callerWethBalanceBefore.add(functionCallReward));
         expect(srFluidBalanceAfter).to.be.gt(srFluidBalanceBefore);
-        console.log(`Rate of ETH/FLUID in royalty swap: ${halfAfterReward.mul(100).div(srFluidBalanceAfter).toNumber() / 100}`);
       });
     });
 
