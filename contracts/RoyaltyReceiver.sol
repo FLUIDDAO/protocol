@@ -13,11 +13,7 @@ import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 ///     from secondary sales of the Fluid DAO NFT.
 contract RoyaltyReceiver is Ownable {
 
-    event ClaimRoyalties(
-        uint256 amountFluidToStaking,
-        uint256 amountWethToDao,
-        uint256 amountWethToCaller
-    );
+    event ClaimRoyalties();
     event SetSlippageAllowance(uint256 _slippageAllowance);
 
     uint256 public slippageAllowance;
@@ -58,11 +54,11 @@ contract RoyaltyReceiver is Ownable {
 
         IERC20(weth).transfer(dao, half);
         IERC20(weth).transfer(msg.sender, functionCallReward);
-        uint256 fluidReturned = swapWethForTokens(half);
-        emit ClaimRoyalties(fluidReturned, half, functionCallReward);
+        swapWethForTokens(half);
+        emit ClaimRoyalties();
     }
 
-    function swapWethForTokens(uint256 amount) private returns (uint256 fluidReturned) {
+    function swapWethForTokens(uint256 amount) private {
         address[] memory path = new address[](2);
         path[0] = weth;
         path[1] = fluidToken;
@@ -73,7 +69,7 @@ contract RoyaltyReceiver is Ownable {
         uint256 spotPrice = router.quote(amount, reserveWeth, reserveFluid);
         uint256 minToReturn = spotPrice * (SLIPPAGE_MAX - slippageAllowance) / SLIPPAGE_MAX;
 
-        (, fluidReturned) = router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             amount,
             minToReturn,
             path,
