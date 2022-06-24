@@ -2,12 +2,12 @@ pragma solidity ^0.8.12;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IFluidToken, IERC20} from "./interfaces/IFluidToken.sol";
 
 // Fork of https://solidity-by-example.org/defi/staking-rewards/
 
 contract StakingRewards is Ownable, ReentrancyGuard {
-    IERC20 public token;
+    IFluidToken public token;
 
     uint public rewardRate = 100;
     uint public lastUpdateTime;
@@ -34,11 +34,10 @@ contract StakingRewards is Ownable, ReentrancyGuard {
     }
 
     constructor(address _token) {
-        token = IERC20(_token);
+        token = IFluidToken(_token);
     }
 
     function updateRewardRate(uint256 _rewardRate) public onlyOwner {
-        // TODO: require reward rate only changes by X % at a time?
         require(_rewardRate != rewardRate, "_rewardRate == rewardRate");
         rewardRate = _rewardRate;
         emit RewardRateUpdated(_rewardRate);
@@ -47,8 +46,11 @@ contract StakingRewards is Ownable, ReentrancyGuard {
     function stake(uint _amount) public updateReward(msg.sender) nonReentrant {
         require(_amount > 0, "Cannot deposit 0");
         require(token.balanceOf(msg.sender) >= _amount, "Not enough");
-        // only increment by amount after fees
-        uint256 amountAfterFee = _amount - _amount/250;
+        uint256 amountAfterFee = _amount;
+        // If the account has to pay a transfer fee, ensure correct accounting
+        if (!token.noFeeOnTransfer(msg.sender)) {
+            amountAfterFee -= amountAfterFee/250;
+        }
         _totalSupply += amountAfterFee;
         _balances[msg.sender] += amountAfterFee;
         token.transferFrom(msg.sender, address(this), _amount);
@@ -60,7 +62,11 @@ contract StakingRewards is Ownable, ReentrancyGuard {
         _totalSupply -= _amount;
         _balances[msg.sender] -= _amount;
         token.transfer(msg.sender, _amount);
-        uint256 amountAfterFee = _amount - _amount/250;
+        uint256 amountAfterFee = _amount;
+        // If the acccount has to pay a transfer fee, emit correct withdrawal
+        if(!token.noFeeOnTransfer(msg.sender)) {
+            amountAfterFee -= amountAfterFee/250;
+        }
         emit Withdrawn(msg.sender, amountAfterFee);
     }
 
