@@ -13,8 +13,6 @@ import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
 import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 
-// TODO: will we ever expect DAO to change?
-// TODO: Do we need the whitelist of addresses that can transfer w/o fees?
 contract FluidToken is
     IFluidToken,
     ERC20Permit,
@@ -35,9 +33,9 @@ contract FluidToken is
         0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
     );
 
-    mapping(address => bool) public whitelistedAddress;
+    mapping(address => bool) public noFeeOnTransfer;
 
-    event SetWhitelistAddress(address whitelistAccount, bool value);
+    event SetNoFeeOnTransfer(address whitelistAccount, bool value);
     event SetSwapAndLiquifyEnabled(bool enabled);
     event SetStakingPool(address _stakingPool);
     event SetAuctionHouse(address _auctionHouse);
@@ -62,6 +60,7 @@ contract FluidToken is
             .createPair(address(this), router.WETH());
         sushiPair = IUniswapV2Pair(pair);
 
+        noFeeOnTransfer[_dao] = true;
         // set the rest of the contract variables
         dao = _dao;
         slippageAllowance = 500;
@@ -74,13 +73,13 @@ contract FluidToken is
         _mint(_to, amount);
     }
 
-    function setWhitelistAddress(address _whitelist, bool _status)
+    function setNoFeeOnTransfer(address _address, bool _status)
         external
         onlyOwner
     {
-        require(_whitelist != address(0), "setWhitelistAddress: Zero address");
-        whitelistedAddress[_whitelist] = _status;
-        emit SetWhitelistAddress(_whitelist, _status);
+        require(_address != address(0), "setNoFeeOnTransfer: Zero address");
+        noFeeOnTransfer[_address] = _status;
+        emit SetNoFeeOnTransfer(_address, _status);
     }
 
     function setSwapAndLiquifyEnabled(bool _enabled) external onlyOwner {
@@ -132,7 +131,7 @@ contract FluidToken is
         address recipient,
         uint256 amount
     ) internal virtual override {
-        if (whitelistedAddress[sender] || whitelistedAddress[recipient]) {
+        if (noFeeOnTransfer[sender] || noFeeOnTransfer[recipient]) {
             super._transfer(sender, recipient, amount);
         } else {
             // accrue 0.4% for fees to be later distributed

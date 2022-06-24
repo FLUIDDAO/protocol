@@ -95,7 +95,6 @@ const setup = async () => {
         DURATION
       );
 
-
       // now that auction house is deployed, set to the erc721
       await fluidERC721.setAuctionHouse(auctionHouse.address, overrides);
       await fluidERC20.setAuctionHouse(auctionHouse.address, overrides);
@@ -139,6 +138,9 @@ const setup = async () => {
         expect(sushiPair.address).to.not.equal(ethers.constants.AddressZero);
       });
       it("Should accrue fees on transfers", async () => {
+        // unapprove fee transfers for dao
+        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+
         const halfMinted = initialMintAmountInEth.div(2);
         await fluidERC20.connect(dao).transfer(account1.address, halfMinted, overrides);
         let fee1 = halfMinted.div(250);
@@ -155,12 +157,20 @@ const setup = async () => {
         expect(balance1).to.equal(0);
         expect(balance2).to.equal(receivedAmt2);
       });
+      it("Should not accrue fees if sender/recipient is approved for noFeeOnTransfers", async () => {
+        await fluidERC20.connect(dao).transfer(account1.address, initialMintAmountInEth, overrides);
+        await fluidERC20.connect(account1).transfer(dao.address, initialMintAmountInEth, overrides);
+        const feeBalance = await fluidERC20.balanceOf(fluidERC20.address);
+        expect(feeBalance).to.equal(0);
+      });
       it("Should revert if setting slippage above 100%", async () => {
         const tx = fluidERC20.connect(deployer).setSlippageAllowance(10001);
         await expect(tx).to.be.revertedWith("Cannot set slippage above 100%");
       });
       it("Should revert on distributeFees() if slippage exceeds allowance", async () => {
-        
+        // unapprove fee transfers for dao
+        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+
         const block = await ethers.provider.getBlock("latest");
         await router.connect(dao).addLiquidityETH(
           fluidERC20.address,
@@ -176,6 +186,8 @@ const setup = async () => {
         await expect(tx).to.be.revertedWith("UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT");
       });
       it("Should succeed in distributeFees()", async () => {
+        // unapprove fee transfers for dao
+        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
 
         const block = await ethers.provider.getBlock("latest");
         await router.connect(dao).addLiquidityETH(
@@ -215,6 +227,9 @@ const setup = async () => {
 
         // Let's say we have 1 WETH in royalties accrued
         await weth.connect(wethWhale).transfer(royaltyReceiver.address, fromETHNumber(1), overrides);
+
+        // unapprove fee transfers for dao
+        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
 
         // We'll first need to add liquidity to the pool so distributing fees can trade
         const block = await ethers.provider.getBlock("latest");
@@ -515,11 +530,33 @@ const setup = async () => {
           stakingRewards.connect(dao).updateRewardRate(500, overrides)
         ).to.be.reverted;
       });
-      it("Should accurately update balances on stake/withdraw", async () => {
+      it("Should accurately update balances on stake/withdraw for no fee transfer address", async () => {
+        const amount = initialMintAmountInEth.div(4);
+        
+        // stake 1/4 of balance at start
+        await stakingRewards.connect(dao).stake(amount, overrides);
+        expect(await (await fluidERC20.balanceOf(dao.address))).to.equal(initialMintAmountInEth.sub(amount));
+        expect(await stakingRewards.balanceOf(dao.address)).to.equal(amount);
+
+        // stake remaining balance
+        await stakingRewards.connect(dao).stake(amount.mul(3), overrides);
+        const stakedBalance = await stakingRewards.balanceOf(dao.address);
+        expect(stakedBalance).to.equal(amount.mul(4));
+        expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(amount.mul(4));
+        expect(await fluidERC20.balanceOf(dao.address)).to.equal(0);
+        
+        await stakingRewards.connect(dao).withdraw(stakedBalance, overrides);
+        expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(0);
+        expect(await fluidERC20.balanceOf(dao.address)).to.equal(stakedBalance);
+      });
+      it("Should accurately update balances on stake/withdraw for fee transfer address", async () => {
         const amount = initialMintAmountInEth.div(4);
         const fee = amount.div(250);
         const amountAfterFee = amount.sub(fee);
-        
+
+        // First unapprove dao so that it pays for transfer fees
+        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+
         // stake 1/4 of balance at start
         await stakingRewards.connect(dao).stake(amount, overrides);
         expect(await (await fluidERC20.balanceOf(dao.address))).to.equal(initialMintAmountInEth.sub(amount));
@@ -531,7 +568,7 @@ const setup = async () => {
         expect(stakedBalance).to.equal(amountAfterFee.mul(4));
         expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(amountAfterFee.mul(4));
         expect(await fluidERC20.balanceOf(dao.address)).to.equal(0);
-        
+
         const feeForWithdrawal = stakedBalance.div(250);
         const amountAfterWithdrawalfee = stakedBalance.sub(feeForWithdrawal);
 
@@ -539,6 +576,7 @@ const setup = async () => {
         expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(0);
         expect(await fluidERC20.balanceOf(dao.address)).to.equal(amountAfterWithdrawalfee);
       });
+
       it("Should revert if rewards exceed locked supply", async () => {
         await stakingRewards.connect(dao).stake(initialMintAmountInEth, overrides);
         // fast-fwd a little bit
@@ -553,6 +591,9 @@ const setup = async () => {
         const rewardAfterFee = rewardInDay - (rewardInDay / 250);
         const amount = initialMintAmountInEth.div(4);
         const amountAfterFee = amount.sub(amount.div(250));
+        // unapprove dao so it pays fee on transfer
+        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+        
         // pre-fund staking contract to give rewards
         await fluidERC20.connect(dao).transfer(stakingRewards.address, amount, overrides);
 
@@ -589,6 +630,8 @@ const setup = async () => {
         const rewardAfterFee = rewardInDay - (rewardInDay / 250);
         const amount = initialMintAmountInEth.div(4);
         const amountAfterFee = amount.sub(amount.div(250));
+        // unapprove dao so it pays fee on transfer
+        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
         // pre-fund staking contract to give rewards
         await fluidERC20.connect(dao).transfer(stakingRewards.address, amount, overrides);
 
