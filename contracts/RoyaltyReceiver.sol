@@ -13,6 +13,13 @@ import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 ///     from secondary sales of the Fluid DAO NFT.
 contract RoyaltyReceiver is Ownable {
 
+    event ClaimRoyalties(
+        uint256 amountFluidToStaking,
+        uint256 amountWethToDao,
+        uint256 amountWethToCaller
+    );
+    event SetSlippageAllowance(uint256 _slippageAllowance);
+
     uint256 public slippageAllowance;
     uint256 public constant SLIPPAGE_MAX = 10000;
     address public stakingRewards;
@@ -49,12 +56,13 @@ contract RoyaltyReceiver is Ownable {
         uint256 functionCallReward = balance/100; // 1% reward to caller
         uint256 half = (balance - functionCallReward)/2;
 
-        swapWethForTokens(half);
         IERC20(weth).transfer(dao, half);
         IERC20(weth).transfer(msg.sender, functionCallReward);
+        uint256 fluidReturned = swapWethForTokens(half);
+        emit ClaimRoyalties(fluidReturned, half, functionCallReward);
     }
 
-    function swapWethForTokens(uint256 amount) private {
+    function swapWethForTokens(uint256 amount) private returns (uint256 fluidReturned) {
         address[] memory path = new address[](2);
         path[0] = weth;
         path[1] = fluidToken;
@@ -65,7 +73,7 @@ contract RoyaltyReceiver is Ownable {
         uint256 spotPrice = router.quote(amount, reserveWeth, reserveFluid);
         uint256 minToReturn = spotPrice * (SLIPPAGE_MAX - slippageAllowance) / SLIPPAGE_MAX;
 
-        router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+        (, fluidReturned) = router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             amount,
             minToReturn,
             path,
@@ -78,6 +86,7 @@ contract RoyaltyReceiver is Ownable {
         require(_slippageAllowance != slippageAllowance, "_slippageAllowance == slippageAllowance");
         require(_slippageAllowance <= SLIPPAGE_MAX, "Cannot set slippage above 100%");
         slippageAllowance = _slippageAllowance;
+        emit SetSlippageAllowance(_slippageAllowance);
     }
 
     function recoverERC20(
