@@ -167,6 +167,18 @@ const setup = async () => {
         const tx = fluidERC20.connect(deployer).setSlippageAllowance(10001);
         await expect(tx).to.be.revertedWith("Cannot set slippage above 100%");
       });
+      it("Should revert if setting reward rate above 10%", async () => {
+        const tx = fluidERC20.connect(deployer).setRewardRate(11);
+        await expect(tx).to.be.revertedWith("Cannot set rewardRate above 10%");
+      })
+      it("Should revert if non-owner tries to set reward rate", async () => {
+        const tx = fluidERC20.connect(account1).setRewardRate(9, overrides);
+        await expect(tx).to.be.revertedWith("Ownable: caller is not the owner")
+      })
+      it("Should revert if non-owner tries to set slippage allowance", async () => {
+        const tx = fluidERC20.connect(account1).setSlippageAllowance(5);
+        await expect(tx).to.be.revertedWith("Ownable: caller is not the owner")
+      });
       it("Should revert on distributeFees() if slippage exceeds allowance", async () => {
         // unapprove fee transfers for dao
         await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
@@ -207,7 +219,7 @@ const setup = async () => {
         expect(fluidFluidBalanceBefore).to.equal(fromETHNumber(amountDepositFLUID / 250));
         expect(await sushiPair.balanceOf(fluidERC20.address)).to.equal(0);
         
-        let reward = fluidFluidBalanceBefore.div(100);
+        let reward = fluidFluidBalanceBefore.div(10);
         let amount = fluidFluidBalanceBefore.sub(reward).div(4);
 
         await fluidERC20.connect(account1).distributeFees(overrides);
@@ -248,7 +260,7 @@ const setup = async () => {
         const callerWethBalanceBefore = await weth.balanceOf(account1.address);
         const srFluidBalanceBefore = await fluidERC20.balanceOf(stakingRewards.address);
 
-        const functionCallReward = rrWethBalanceBefore.div(100);
+        const functionCallReward = rrWethBalanceBefore.div(10);
         const halfAfterReward = rrWethBalanceBefore.sub(functionCallReward).div(2);
 
         await royaltyReceiver.connect(account1).claimRoyalties(overrides);

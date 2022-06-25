@@ -23,7 +23,9 @@ contract FluidToken is
 {
     bool public swapAndLiquifyEnabled = true;
     uint256 public slippageAllowance;
-    uint256 public constant SLIPPAGE_MAX = 10000;
+    uint256 public constant SLIPPAGE_MAX = 100; // 100%
+    uint256 public rewardRate;
+    uint256 public constant REWARD_MAX = 10; // 10%
     address public stakingPool;
     address public auctionHouse;
     address public dao;
@@ -40,6 +42,7 @@ contract FluidToken is
     event SetStakingPool(address _stakingPool);
     event SetAuctionHouse(address _auctionHouse);
     event SetSlippageAllowance(uint256 _slippageAllowance);
+    event SetRewardRate(uint256 _rewardRate);
     event SwapAndLiquify(
         uint256 tokensSwapped,
         uint256 ethReceived,
@@ -63,7 +66,8 @@ contract FluidToken is
         noFeeOnTransfer[_dao] = true;
         // set the rest of the contract variables
         dao = _dao;
-        slippageAllowance = 500;
+        slippageAllowance = 5; // 5%
+        rewardRate = 10; // 10%
 
         _mint(initialHolder, initialSupply);
     }
@@ -104,13 +108,20 @@ contract FluidToken is
         emit SetSlippageAllowance(_slippageAllowance);
     }
 
+    function setRewardRate(uint256 _rewardRate) external onlyOwner {
+        require(_rewardRate != rewardRate, "_rewardRate == rewardRate");
+        require(_rewardRate <= REWARD_MAX, "Cannot set rewardRate above 10%");
+        rewardRate = _rewardRate;
+        emit SetRewardRate(_rewardRate);
+    }
+
     /// @notice Rewardable function to distrubute fees
     /// @dev .1% of all transfer fees are sent to burn, dao, stakers, and add LP
     
     function distributeFees() external {
         uint256 balance = balanceOf(address(this));
-        // Give caller 1% of fees accrued
-        uint256 reward = balance / 100;
+        // Give caller % of fees accrued
+        uint256 reward = balance / rewardRate;
         // Break up the accrued fees four ways equally for distribution
         uint256 amount = (balance - reward) / 4;
 

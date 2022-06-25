@@ -15,9 +15,12 @@ contract RoyaltyReceiver is Ownable {
 
     event ClaimRoyalties();
     event SetSlippageAllowance(uint256 _slippageAllowance);
+    event SetRewardRate(uint256 _rewardRate);
 
     uint256 public slippageAllowance;
-    uint256 public constant SLIPPAGE_MAX = 10000;
+    uint256 public constant SLIPPAGE_MAX = 100; // 100%
+    uint256 public rewardRate;
+    uint256 public constant REWARD_MAX = 10; // 10%
     address public stakingRewards;
     address public dao;
     address public weth;
@@ -41,7 +44,8 @@ contract RoyaltyReceiver is Ownable {
         dao = _dao;
         stakingRewards = _stakingRewards;
         sushiPair = _sushiPair;
-        slippageAllowance = 500;
+        slippageAllowance = 5; // 5%
+        rewardRate = 10; // 10%
     }
 
     /// @notice Claim royalties earned from FLUID NFT market sales
@@ -49,13 +53,36 @@ contract RoyaltyReceiver is Ownable {
     function claimRoyalties() external {
         // divide rewards by two - distribute 
         uint256 balance = IERC20(weth).balanceOf(address(this));
-        uint256 functionCallReward = balance/100; // 1% reward to caller
+        uint256 functionCallReward = balance/rewardRate; // reward to caller
         uint256 half = (balance - functionCallReward)/2;
 
         IERC20(weth).transfer(dao, half);
         IERC20(weth).transfer(msg.sender, functionCallReward);
         swapWethForTokens(half);
         emit ClaimRoyalties();
+    }
+
+    function setSlippageAllowance(uint256 _slippageAllowance) external onlyOwner {
+        require(_slippageAllowance != slippageAllowance, "_slippageAllowance == slippageAllowance");
+        require(_slippageAllowance <= SLIPPAGE_MAX, "Cannot set slippage above 100%");
+        slippageAllowance = _slippageAllowance;
+        emit SetSlippageAllowance(_slippageAllowance);
+    }
+
+    function setRewardRate(uint256 _rewardRate) external onlyOwner {
+        require(_rewardRate != rewardRate, "_rewardRate == rewardRate");
+        require(_rewardRate <= REWARD_MAX, "Cannot set rewardRate above 10%");
+        rewardRate = _rewardRate;
+        emit SetRewardRate(_rewardRate);
+    }
+
+    function recoverERC20(
+        address token,
+        uint256 amount,
+        address recipient
+    ) external onlyOwner {
+        require(token != weth, "Cannot withdraw royalty token");
+        IERC20(token).transfer(recipient, amount);
     }
 
     function swapWethForTokens(uint256 amount) private {
@@ -76,21 +103,5 @@ contract RoyaltyReceiver is Ownable {
             stakingRewards,
             block.timestamp
         );
-    }
-
-    function setSlippageAllowance(uint256 _slippageAllowance) external onlyOwner {
-        require(_slippageAllowance != slippageAllowance, "_slippageAllowance == slippageAllowance");
-        require(_slippageAllowance <= SLIPPAGE_MAX, "Cannot set slippage above 100%");
-        slippageAllowance = _slippageAllowance;
-        emit SetSlippageAllowance(_slippageAllowance);
-    }
-
-    function recoverERC20(
-        address token,
-        uint256 amount,
-        address recipient
-    ) external onlyOwner {
-        require(token != weth, "Cannot withdraw royalty token");
-        IERC20(token).transfer(recipient, amount);
     }
 }
