@@ -56,7 +56,6 @@ const setup = async () => {
       fluidERC20 = await deploy<FluidToken>(
         "FluidToken",
         undefined,
-        dao.address, // DAO
         dao.address,
         initialMintAmountInEth
       );
@@ -98,7 +97,7 @@ const setup = async () => {
       // now that auction house is deployed, set to the erc721
       await fluidERC721.setAuctionHouse(auctionHouse.address, overrides);
       await fluidERC20.setAuctionHouse(auctionHouse.address, overrides);
-      await fluidERC20.setStakingPool(stakingRewards.address, overrides);
+      await fluidERC20.setStakingRewards(stakingRewards.address, overrides);
 
       const routerAddr = await fluidERC20.router();
       router = await getContractAt<IUniswapV2Router02>("IUniswapV2Router02", routerAddr);

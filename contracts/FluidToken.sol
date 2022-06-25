@@ -24,7 +24,7 @@ contract FluidToken is
     bool public swapAndLiquifyEnabled = true;
     uint256 public slippageAllowance;
     uint256 public constant SLIPPAGE_MAX = 10000;
-    address public stakingPool;
+    address public stakingRewards;
     address public auctionHouse;
     address public dao;
     IUniswapV2Pair public sushiPair;
@@ -37,7 +37,7 @@ contract FluidToken is
 
     event SetNoFeeOnTransfer(address whitelistAccount, bool value);
     event SetSwapAndLiquifyEnabled(bool enabled);
-    event SetStakingPool(address _stakingPool);
+    event SetStakingRewards(address _stakingRewards);
     event SetAuctionHouse(address _auctionHouse);
     event SetSlippageAllowance(uint256 _slippageAllowance);
     event SwapAndLiquify(
@@ -48,7 +48,6 @@ contract FluidToken is
 
     constructor(
         address _dao,
-        address initialHolder,
         uint256 initialSupply
     ) ERC20("Fluid DAO", "FLD") ERC20Permit("Fluid DAO")
     {
@@ -60,12 +59,12 @@ contract FluidToken is
             .createPair(address(this), router.WETH());
         sushiPair = IUniswapV2Pair(pair);
 
-        noFeeOnTransfer[_dao] = true;
         // set the rest of the contract variables
         dao = _dao;
         slippageAllowance = 500;
+        noFeeOnTransfer[_dao] = true;
 
-        _mint(initialHolder, initialSupply);
+        _mint(_dao, initialSupply);
     }
 
     function mint(address _to, uint256 amount) external override {
@@ -92,9 +91,9 @@ contract FluidToken is
         emit SetAuctionHouse(_auctionHouse);
     }
 
-    function setStakingPool(address _stakingPool) external onlyOwner {
-        stakingPool = _stakingPool;
-        emit SetStakingPool(_stakingPool);
+    function setStakingRewards(address _stakingRewards) external onlyOwner {
+        stakingRewards = _stakingRewards;
+        emit SetStakingRewards(_stakingRewards);
     }
 
     function setSlippageAllowance(uint256 _slippageAllowance) external onlyOwner {
@@ -119,7 +118,7 @@ contract FluidToken is
         // Transfer fees and provide LP
         _burn(address(this), amount);
         super._transfer(address(this), dao, amount);
-        super._transfer(address(this), stakingPool, amount);
+        super._transfer(address(this), stakingRewards, amount);
         if (swapAndLiquifyEnabled) {
             swapAndLiquify(amount);
         }
