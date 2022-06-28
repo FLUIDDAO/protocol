@@ -8,13 +8,16 @@ import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Vo
 import {ERC20VotesComp} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20VotesComp.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
-import {IFluidToken} from "./interfaces/IFluidToken.sol";
+import {IFLUIDtoken} from "./interfaces/IFLUIDtoken.sol";
 import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
 import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 
-contract FluidToken is
-    IFluidToken,
+/// @title FLUID DAO ERC20
+/// @author @cartercarlson
+/// @notice Token contract for FLUID DAO.
+contract FLUIDtoken is
+    IFLUIDtoken,
     ERC20Permit,
     ERC20Votes,
     ERC20VotesComp,
@@ -26,7 +29,7 @@ contract FluidToken is
     uint256 public constant SLIPPAGE_MAX = 100; // 100%
     uint256 public rewardRate;
     uint256 public constant REWARD_MAX = 10; // 10%
-    address public stakingPool;
+    address public stakingRewards;
     address public auctionHouse;
     address public dao;
     IUniswapV2Pair public sushiPair;
@@ -39,7 +42,7 @@ contract FluidToken is
 
     event SetNoFeeOnTransfer(address whitelistAccount, bool value);
     event SetSwapAndLiquifyEnabled(bool enabled);
-    event SetStakingPool(address _stakingPool);
+    event SetStakingRewards(address _stakingRewards);
     event SetAuctionHouse(address _auctionHouse);
     event SetSlippageAllowance(uint256 _slippageAllowance);
     event SetRewardRate(uint256 _rewardRate);
@@ -53,7 +56,7 @@ contract FluidToken is
         address _dao,
         address initialHolder,
         uint256 initialSupply
-    ) ERC20("Fluid DAO", "FLD") ERC20Permit("Fluid DAO")
+    ) ERC20("FLUID DAO", "FLUID") ERC20Permit("Fluid DAO")
     {
         // approve router spending
         IERC20(router.WETH()).approve(address(router), type(uint256).max);
@@ -77,6 +80,11 @@ contract FluidToken is
         _mint(_to, amount);
     }
 
+    /// @notice Configure an address to disable/enable transfer fees
+    /// @dev Every address will pay transfer fees unless set otherwise
+    /// @dev Only callable by owner
+    /// @param _address Address to disable/enable fee on transfers
+    /// @param _status True if disabling fees on transfers, false if re-enabling
     function setNoFeeOnTransfer(address _address, bool _status)
         external
         onlyOwner
@@ -86,21 +94,35 @@ contract FluidToken is
         emit SetNoFeeOnTransfer(_address, _status);
     }
 
+    /// @notice Additional configuration to disable/enable swap and LP on sushi
+    /// @param _enabled True if swapping and providing LP to sushi and sending LP
+    ///                     token to DAO, false if not swapping/LP
+    /// @dev Only callable by owner
     function setSwapAndLiquifyEnabled(bool _enabled) external onlyOwner {
         swapAndLiquifyEnabled = _enabled;
         emit SetSwapAndLiquifyEnabled(_enabled);
     }
 
+    /// @notice Function to set the auction house contract address
+    /// @param _auctionHouse Address of auction house contract
+    /// @dev Only callable by owner
     function setAuctionHouse(address _auctionHouse) external onlyOwner {
         auctionHouse = _auctionHouse;
         emit SetAuctionHouse(_auctionHouse);
     }
 
-    function setStakingPool(address _stakingPool) external onlyOwner {
-        stakingPool = _stakingPool;
-        emit SetStakingPool(_stakingPool);
+    /// @notice Function to set the staking rewards contract address
+    /// @param _stakingRewards Address of staking rewards contract
+    /// @dev Only callable by owner
+    function setStakingRewards(address _stakingRewards) external onlyOwner {
+        stakingRewards = _stakingRewards;
+        emit SetStakingRewards(_stakingRewards);
     }
 
+    
+    /// @notice Set the slippage allowance used when swapping on sushi
+    /// @param _slippageAllowance New slippage allowance in percentage
+    /// @dev Only callable by owner
     function setSlippageAllowance(uint256 _slippageAllowance) external onlyOwner {
         require(_slippageAllowance != slippageAllowance, "_slippageAllowance == slippageAllowance");
         require(_slippageAllowance <= SLIPPAGE_MAX, "Cannot set slippage above 100%");
@@ -108,6 +130,9 @@ contract FluidToken is
         emit SetSlippageAllowance(_slippageAllowance);
     }
 
+    /// @notice Set the reward rate used to reward the caller in `claimRoyalties()`
+    /// @param _rewardRate New reward rate in percentage
+    /// @dev Only callable by owner
     function setRewardRate(uint256 _rewardRate) external onlyOwner {
         require(_rewardRate != rewardRate, "_rewardRate == rewardRate");
         require(_rewardRate <= REWARD_MAX, "Cannot set rewardRate above 10%");
@@ -117,7 +142,6 @@ contract FluidToken is
 
     /// @notice Rewardable function to distrubute fees
     /// @dev .1% of all transfer fees are sent to burn, dao, stakers, and add LP
-    
     function distributeFees() external {
         uint256 balance = balanceOf(address(this));
         // Give caller % of fees accrued
@@ -130,7 +154,7 @@ contract FluidToken is
         // Transfer fees and provide LP
         _burn(address(this), amount);
         super._transfer(address(this), dao, amount);
-        super._transfer(address(this), stakingPool, amount);
+        super._transfer(address(this), stakingRewards, amount);
         if (swapAndLiquifyEnabled) {
             swapAndLiquify(amount);
         }

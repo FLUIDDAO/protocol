@@ -7,10 +7,10 @@ import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
 import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 
-/// @title Fluid DAO Royalties Receiver
+/// @title FLUID DAO Royalties Receiver
 /// @author @cartercarlson
-/// @notice Fluid DAO contract to distribute the royalties earned
-///     from secondary sales of the Fluid DAO NFT.
+/// @notice FLUID DAO contract to distribute the royalties earned
+///     from secondary sales of the FLUID DAO NFT.
 contract RoyaltyReceiver is Ownable {
 
     event ClaimRoyalties();
@@ -24,7 +24,7 @@ contract RoyaltyReceiver is Ownable {
     address public stakingRewards;
     address public dao;
     address public weth;
-    address public fluidToken;
+    address public FLUIDtoken;
     // https://dev.sushi.com/docs/Developers/Deployment%20Addresses
     IUniswapV2Router02 public router = IUniswapV2Router02(
         0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
@@ -32,7 +32,7 @@ contract RoyaltyReceiver is Ownable {
     IUniswapV2Pair public sushiPair;
 
     constructor(
-        address _fluidToken,
+        address _FLUIDtoken,
         address _dao,
         address _stakingRewards,
         IUniswapV2Pair _sushiPair
@@ -40,7 +40,7 @@ contract RoyaltyReceiver is Ownable {
 
         weth = router.WETH();
 
-        fluidToken = _fluidToken;
+        FLUIDtoken = _FLUIDtoken;
         dao = _dao;
         stakingRewards = _stakingRewards;
         sushiPair = _sushiPair;
@@ -62,6 +62,9 @@ contract RoyaltyReceiver is Ownable {
         emit ClaimRoyalties();
     }
 
+    /// @notice Set the slippage allowance used when swapping on sushi
+    /// @param _slippageAllowance New slippage allowance in percentage
+    /// @dev Only callable by owner
     function setSlippageAllowance(uint256 _slippageAllowance) external onlyOwner {
         require(_slippageAllowance != slippageAllowance, "_slippageAllowance == slippageAllowance");
         require(_slippageAllowance <= SLIPPAGE_MAX, "Cannot set slippage above 100%");
@@ -69,6 +72,9 @@ contract RoyaltyReceiver is Ownable {
         emit SetSlippageAllowance(_slippageAllowance);
     }
 
+    /// @notice Set the reward rate used to reward the caller in `claimRoyalties()`
+    /// @param _rewardRate New reward rate in percentage
+    /// @dev Only callable by owner
     function setRewardRate(uint256 _rewardRate) external onlyOwner {
         require(_rewardRate != rewardRate, "_rewardRate == rewardRate");
         require(_rewardRate <= REWARD_MAX, "Cannot set rewardRate above 10%");
@@ -76,6 +82,11 @@ contract RoyaltyReceiver is Ownable {
         emit SetRewardRate(_rewardRate);
     }
 
+    /// @notice Recover any erc20 tokens accidentally sent to the contract
+    /// @param token Address of token to recover
+    /// @param amount Amount of token to recover
+    /// @param recipient Address to receive the recovered tokens
+    /// @dev Only callable by the owner.
     function recoverERC20(
         address token,
         uint256 amount,
@@ -88,7 +99,7 @@ contract RoyaltyReceiver is Ownable {
     function swapWethForTokens(uint256 amount) private {
         address[] memory path = new address[](2);
         path[0] = weth;
-        path[1] = fluidToken;
+        path[1] = FLUIDtoken;
 
         IERC20(weth).approve(address(router), amount);
 

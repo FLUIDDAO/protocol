@@ -2,12 +2,15 @@ pragma solidity ^0.8.12;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {IFluidToken, IERC20} from "./interfaces/IFluidToken.sol";
+import {IFLUIDtoken, IERC20} from "./interfaces/IFLUIDtoken.sol";
 
 // Fork of https://solidity-by-example.org/defi/staking-rewards/
 
+/// @title FLUID DAO Staking Rewards
+/// @author @cartercarlson
+/// @notice Staking contract for FLUID token.
 contract StakingRewards is Ownable, ReentrancyGuard {
-    IFluidToken public token;
+    IFLUIDtoken public FLUIDtoken;
 
     uint public rewardRate = 100;
     uint public lastUpdateTime;
@@ -33,10 +36,13 @@ contract StakingRewards is Ownable, ReentrancyGuard {
         _;
     }
 
-    constructor(address _token) {
-        token = IFluidToken(_token);
+    constructor(address _FLUIDtoken) {
+        FLUIDtoken = IFLUIDtoken(_FLUIDtoken);
     }
 
+    /// @notice Update the reward rate per second given to stakers
+    /// @param _rewardRate new reward rate
+    /// @dev Only callable by owner
     function updateRewardRate(uint256 _rewardRate) public onlyOwner {
         require(_rewardRate != rewardRate, "_rewardRate == rewardRate");
         rewardRate = _rewardRate;
@@ -45,15 +51,15 @@ contract StakingRewards is Ownable, ReentrancyGuard {
 
     function stake(uint _amount) public updateReward(msg.sender) nonReentrant {
         require(_amount > 0, "Cannot deposit 0");
-        require(token.balanceOf(msg.sender) >= _amount, "Not enough");
+        require(FLUIDtoken.balanceOf(msg.sender) >= _amount, "Not enough");
         uint256 amountAfterFee = _amount;
         // If the account has to pay a transfer fee, ensure correct accounting
-        if (!token.noFeeOnTransfer(msg.sender)) {
+        if (!FLUIDtoken.noFeeOnTransfer(msg.sender)) {
             amountAfterFee -= amountAfterFee/250;
         }
         _totalSupply += amountAfterFee;
         _balances[msg.sender] += amountAfterFee;
-        token.transferFrom(msg.sender, address(this), _amount);
+        FLUIDtoken.transferFrom(msg.sender, address(this), _amount);
         emit Staked(msg.sender, amountAfterFee);
     }
 
@@ -61,10 +67,10 @@ contract StakingRewards is Ownable, ReentrancyGuard {
         require(_amount > 0, "Cannot withdraw 0");
         _totalSupply -= _amount;
         _balances[msg.sender] -= _amount;
-        token.transfer(msg.sender, _amount);
+        FLUIDtoken.transfer(msg.sender, _amount);
         uint256 amountAfterFee = _amount;
         // If the acccount has to pay a transfer fee, emit correct withdrawal
-        if(!token.noFeeOnTransfer(msg.sender)) {
+        if(!FLUIDtoken.noFeeOnTransfer(msg.sender)) {
             amountAfterFee -= amountAfterFee/250;
         }
         emit Withdrawn(msg.sender, amountAfterFee);
@@ -73,12 +79,12 @@ contract StakingRewards is Ownable, ReentrancyGuard {
     function getReward() public updateReward(msg.sender) {
         uint reward = rewards[msg.sender];
         require(
-            token.balanceOf(address(this)) - reward > _totalSupply,
+            FLUIDtoken.balanceOf(address(this)) - reward > _totalSupply,
             "reward would draw from locked supply"
         );
         if (reward > 0) {
             rewards[msg.sender] = 0;
-            token.transfer(msg.sender, reward);
+            FLUIDtoken.transfer(msg.sender, reward);
             emit RewardPaid(msg.sender, reward);
         }
     }
@@ -89,7 +95,7 @@ contract StakingRewards is Ownable, ReentrancyGuard {
     }
 
     function recoverERC20(address tokenAddress, uint256 tokenAmount) external onlyOwner {
-        require(tokenAddress != address(token), "Cannot withdraw the staking token");
+        require(tokenAddress != address(FLUIDtoken), "Cannot withdraw the staking FLUIDtoken");
         IERC20(tokenAddress).transfer(owner(), tokenAmount);
     }
 
