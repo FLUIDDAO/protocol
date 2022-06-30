@@ -24,7 +24,6 @@ const config: HardhatUserConfig = {
                 runs: 800,
             },
             metadata: {
-                // do not include the metadata hash, since this is machine dependent
                 // and we want all generated code to be deterministic
                 // https://docs.soliditylang.org/en/v0.7.6/metadata.html
                 bytecodeHash: "none",
@@ -35,7 +34,7 @@ const config: HardhatUserConfig = {
         hardhat: {
             forking: {
                 url: `https://eth-mainnet.alchemyapi.io/v2/${ALCHEMY_API_KEY}`,
-                blockNumber: 14448329
+                blockNumber: 14448329,
             },
             gas: "auto",
             // timeout: 1800000,
@@ -45,7 +44,7 @@ const config: HardhatUserConfig = {
             url: `https://kovan.infura.io/v3/${INFURA_KEY}` || "",
             accounts: [`0x${PRIVATE_KEY}`],
             gas: 1000000
-        },
+        }
         // TODO add prod
     },
     typechain: {

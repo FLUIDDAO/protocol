@@ -3,9 +3,9 @@ import { ethers } from "hardhat";
 import { deploy, getContractAt, verifyContract } from "./utils";
 import { fromETHNumber } from "../test/utils/helpers";
 import {
-    FLUIDtoken,
+    TestFLUIDtoken,
     StakingRewards,
-    FLUIDnft,
+    TestFLUIDnft,
     AuctionHouse,
     RoyaltyReceiver,
     IWETH,
@@ -14,21 +14,25 @@ import {
 } from "../artifacts/types";
 
 async function main() {
-    const DAO = "0x000"; // TODO
+    const initialMintAmount = 80;
+    const initialMintAmountInEth = fromETHNumber(initialMintAmount);
+    const IMAGE = "https://fluiddao.mypinata.cloud/ipfs/QmVUiZFL26TkwinCzkoJg72sWdiQgooVt45JPoje9iDcYu";
+    const DAO = "0xB17ca1BC1e9a00850B0b2436e41A055403512387";
+    // args specific to auctionHouse
     const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+    const ROUTER = "0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506";
     const RESERVE_PRICE = fromETHNumber(0.1); // 0.1 ETH
     const TIME_BUFFER = 300;
     const MIN_BID_INCREMENT_PERCENTAGE = 2;
     const DURATION = 60 * 60 * 12; // 12 hrs
-    const initialMintAmount = 80;
 
-    const fluidtoken = await deploy<FLUIDtoken>(
-        "FLUIDtoken",
+    const fluidtoken = await deploy<TestFLUIDtoken>(
+        "TestFLUIDtoken",
         undefined,
         DAO,
-        initialMintAmount
+        initialMintAmountInEth
     );
-    console.log("FLUIDtoken deployed at: ", fluidtoken.address);
+    console.log("TestFLUIDtoken deployed at: ", fluidtoken.address);
 
     const sushiPair = await getContractAt<IUniswapV2Pair>("IUniswapV2Pair", await fluidtoken.sushiPair());
 
@@ -49,14 +53,15 @@ async function main() {
     );
     console.log("RoyaltyReceiver deployed at: ", royaltyReceiver.address);
 
-    const fluidnft = await deploy<FLUIDnft>(
-        "FLUIDnft",
+    const fluidnft = await deploy<TestFLUIDnft>(
+        "TestFLUIDnft",
         undefined,
+        IMAGE,
         royaltyReceiver.address,
         DAO,
         initialMintAmount
     );
-    console.log("FLUIDnft deployed at: ", fluidnft.address);
+    console.log("TestFLUIDnft deployed at: ", fluidnft.address);
 
     const auctionHouse = await deploy<AuctionHouse>(
         "AuctionHouse",
@@ -80,9 +85,9 @@ async function main() {
     console.log("Wait 2 minutes before bytecodes are uploaded to verify contract");
     await new Promise(r => setTimeout(r, 120 * 1000));
     await verifyContract(
-        "FLUIDtoken",
+        "TestFLUIDtoken",
         fluidtoken.address,
-        [DAO, initialMintAmount]
+        [DAO, initialMintAmountInEth]
     );
     await verifyContract(
         "StakingRewards",
@@ -95,9 +100,9 @@ async function main() {
         [fluidtoken.address, DAO, stakingRewards.address, sushiPair.address]
     );
     await verifyContract(
-        "FLUIDnft",
+        "TestFLUIDnft",
         fluidnft.address,
-        [royaltyReceiver.address, DAO, initialMintAmount]
+        [IMAGE, royaltyReceiver.address, DAO, initialMintAmount]
     );
     await verifyContract(
         "AuctionHouse",
@@ -107,7 +112,8 @@ async function main() {
             fluidtoken.address,
             DAO,
             WETH,
-            TIME_BUFFER,RESERVE_PRICE,
+            TIME_BUFFER,
+            RESERVE_PRICE,
             MIN_BID_INCREMENT_PERCENTAGE,
             DURATION
         ]

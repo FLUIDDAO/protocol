@@ -16,7 +16,7 @@ import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 /// @title FLUID DAO ERC20
 /// @author @cartercarlson
 /// @notice Token contract for FLUID DAO.
-contract FLUIDtoken is
+contract TestFLUIDtoken is
     IFLUIDtoken,
     ERC20Permit,
     ERC20Votes,
@@ -35,7 +35,8 @@ contract FLUIDtoken is
     IUniswapV2Pair public sushiPair;
     // https://dev.sushi.com/docs/Developers/Deployment%20Addresses
     IUniswapV2Router02 public router = IUniswapV2Router02(
-        0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
+        // 0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
+        0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506 // kovan
     );
 
     mapping(address => bool) public noFeeOnTransfer;
@@ -61,9 +62,9 @@ contract FLUIDtoken is
         IERC20(router.WETH()).approve(address(router), type(uint256).max);
 
         // Create a uniswap pair for this new token
-        address pair = IUniswapV2Factory(router.factory())
-            .createPair(address(this), router.WETH());
-        sushiPair = IUniswapV2Pair(pair);
+        // address pair = IUniswapV2Factory(router.factory())
+        //     .createPair(address(this), router.WETH());
+        // sushiPair = IUniswapV2Pair(pair);
 
         // set the rest of the contract variables
         dao = _dao;
