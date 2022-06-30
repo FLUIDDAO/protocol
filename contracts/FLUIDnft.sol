@@ -49,15 +49,17 @@ contract FLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
 
     /// @notice Function to set the royalty receiver contract address
     /// @param _royaltyReceiver Address of royalty receiver contract
-    /// @dev Only callable by owner
+    /// @dev Only callable by owner, once
     function setRoyaltyReceiver(address _royaltyReceiver) external onlyOwner {
+        require(royaltyReceiver == address(0), "Already set");
         royaltyReceiver = _royaltyReceiver;
     }
 
     /// @notice Function to set the auction house contract address
     /// @param _auctionHouse Address of auction house contract
-    /// @dev Only callable by owner
+    /// @dev Only callable by owner, once
     function setAuctionHouse(address _auctionHouse) external onlyOwner {
+        require(auctionHouse == address(0), "Already set");
         auctionHouse = _auctionHouse;
     }
 
