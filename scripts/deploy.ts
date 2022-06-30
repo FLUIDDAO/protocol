@@ -28,7 +28,7 @@ async function main() {
         DAO,
         initialMintAmount
     );
-    console.log("FluidToken deployed at: ", fluidtoken.address);
+    console.log("FLUIDtoken deployed at: ", fluidtoken.address);
 
     const sushiPair = await getContractAt<IUniswapV2Pair>("IUniswapV2Pair", await fluidtoken.sushiPair());
 
@@ -37,7 +37,7 @@ async function main() {
         undefined,
         fluidtoken.address
     );
-    console.log("Fluid Token contract deployed at: ", fluidtoken.address);
+    console.log("StakingRewards deployed at: ", fluidtoken.address);
 
     const royaltyReceiver = await deploy<RoyaltyReceiver>(
         "RoyaltyReceiver",
@@ -56,7 +56,7 @@ async function main() {
         DAO,
         initialMintAmount
     );
-    console.log("FluidNFT deployed at: ", fluidnft.address);
+    console.log("FLUIDnft deployed at: ", fluidnft.address);
 
     const auctionHouse = await deploy<AuctionHouse>(
         "AuctionHouse",

@@ -55,7 +55,7 @@ contract FLUIDtoken is
     constructor(
         address _dao,
         uint256 initialSupply
-    ) ERC20("FLUID DAO", "FLUID") ERC20Permit("Fluid DAO")
+    ) ERC20("FLUID DAO", "FLUID") ERC20Permit("FLUID DAO")
     {
         // approve router spending
         IERC20(router.WETH()).approve(address(router), type(uint256).max);
