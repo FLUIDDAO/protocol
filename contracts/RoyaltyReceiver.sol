@@ -5,35 +5,47 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IUniswapV2Router02} from  "./interfaces/IUniswapV2Router02.sol";
 import {IUniswapV2Factory} from  "./interfaces/IUniswapV2Factory.sol";
+import {IUniswapV2Pair} from "./interfaces/IUniswapV2Pair.sol";
 
-/// @title Fluid DAO Royalties Receiver
+/// @title FLUID DAO Royalties Receiver
 /// @author @cartercarlson
-/// @notice Fluid DAO contract to distribute the royalties earned
-///     from secondary sales of the Fluid DAO NFT.
+/// @notice FLUID DAO contract to distribute the royalties earned
+///     from secondary sales of the FLUID DAO NFT.
 contract RoyaltyReceiver is Ownable {
 
-    address public stakingPool;
+    event ClaimRoyalties();
+    event SetSlippageAllowance(uint256 _slippageAllowance);
+    event SetRewardRate(uint256 _rewardRate);
+
+    uint256 public slippageAllowance;
+    uint256 public constant SLIPPAGE_MAX = 100; // 100%
+    uint256 public rewardRate;
+    uint256 public constant REWARD_MAX = 10; // 10%
+    address public stakingRewards;
     address public dao;
     address public weth;
-    address public fluidToken;
+    address public FLUIDtoken;
+    // https://dev.sushi.com/docs/Developers/Deployment%20Addresses
     IUniswapV2Router02 public router = IUniswapV2Router02(
-        0x1b02dA8Cb0d097eB8D57A175b88c7D8b47997506
+        0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F
     );
+    IUniswapV2Pair public sushiPair;
 
     constructor(
-        address _fluidToken,
+        address _FLUIDtoken,
         address _dao,
-        address _stakingPool
+        address _stakingRewards,
+        IUniswapV2Pair _sushiPair
     ) {
 
         weth = router.WETH();
 
-        fluidToken = _fluidToken;
+        FLUIDtoken = _FLUIDtoken;
         dao = _dao;
-        stakingPool = _stakingPool;
-
-        // pre-approve router spending weth
-        IERC20(weth).approve(address(router), type(uint256).max);
+        stakingRewards = _stakingRewards;
+        sushiPair = _sushiPair;
+        slippageAllowance = 5; // 5%
+        rewardRate = 10; // 10%
     }
 
     /// @notice Claim royalties earned from FLUID NFT market sales
@@ -41,35 +53,66 @@ contract RoyaltyReceiver is Ownable {
     function claimRoyalties() external {
         // divide rewards by two - distribute 
         uint256 balance = IERC20(weth).balanceOf(address(this));
-        uint256 functionCallReward = balance/100; // 1% reward to caller
+        uint256 functionCallReward = balance/rewardRate; // reward to caller
         uint256 half = (balance - functionCallReward)/2;
 
-        swapWethForTokens(half);
         IERC20(weth).transfer(dao, half);
         IERC20(weth).transfer(msg.sender, functionCallReward);
+        swapWethForTokens(half);
+        emit ClaimRoyalties();
+    }
+
+    /// @notice Set the slippage allowance used when swapping on sushi
+    /// @param _slippageAllowance New slippage allowance in percentage
+    /// @dev Only callable by owner
+    function setSlippageAllowance(uint256 _slippageAllowance) external onlyOwner {
+        require(_slippageAllowance != slippageAllowance, "_slippageAllowance == slippageAllowance");
+        require(_slippageAllowance <= SLIPPAGE_MAX, "Cannot set slippage above 100%");
+        slippageAllowance = _slippageAllowance;
+        emit SetSlippageAllowance(_slippageAllowance);
+    }
+
+    /// @notice Set the reward rate used to reward the caller in `claimRoyalties()`
+    /// @param _rewardRate New reward rate in percentage
+    /// @dev Only callable by owner
+    function setRewardRate(uint256 _rewardRate) external onlyOwner {
+        require(_rewardRate != rewardRate, "_rewardRate == rewardRate");
+        require(_rewardRate <= REWARD_MAX, "Cannot set rewardRate above 10%");
+        rewardRate = _rewardRate;
+        emit SetRewardRate(_rewardRate);
+    }
+
+    /// @notice Recover any erc20 tokens accidentally sent to the contract
+    /// @param token Address of token to recover
+    /// @param amount Amount of token to recover
+    /// @param recipient Address to receive the recovered tokens
+    /// @dev Only callable by the owner.
+    function recoverERC20(
+        address token,
+        uint256 amount,
+        address recipient
+    ) external onlyOwner {
+        require(token != weth, "Cannot withdraw royalty token");
+        IERC20(token).transfer(recipient, amount);
     }
 
     function swapWethForTokens(uint256 amount) private {
         address[] memory path = new address[](2);
         path[0] = weth;
-        path[1] = fluidToken;
+        path[1] = FLUIDtoken;
+
+        IERC20(weth).approve(address(router), amount);
+
+        (uint256 reserveFluid, uint256 reserveWeth, ) = sushiPair.getReserves();
+        uint256 spotPrice = router.quote(amount, reserveWeth, reserveFluid);
+        uint256 minToReturn = spotPrice * (SLIPPAGE_MAX - slippageAllowance) / SLIPPAGE_MAX;
 
         router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
             amount,
-            0,
+            minToReturn,
             path,
-            stakingPool,
+            stakingRewards,
             block.timestamp
         );
-    }
-
-    function recoverERC20(
-        address token,
-        uint256 amount,
-        address recipient
-        ) external onlyOwner {
-        require(token != weth, "Cannot withdraw royalty token");
-        IERC20(token).transfer(recipient, amount);
-        emit Recovered(token, amount);
     }
 }

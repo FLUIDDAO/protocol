@@ -1,26 +1,26 @@
 import fs from "fs";
 import {ethers } from "hardhat";
 import { deploy, verifyContract } from "./utils";
-import { FluidToken } from "../artifacts/types/FluidToken";
+import { FLUIDtoken } from "../artifacts/types/FLUIDtoken";
 
 async function main() {
     const initialMintAmount = 80;
     let [deployer] = await ethers.getSigners();
 
-    const fluidToken = await deploy<FluidToken>(
-        "Fluid Token",
+    const fluidtoken = await deploy<FLUIDtoken>(
+        "FLUIDtoken",
         undefined,
         deployer.address,
         initialMintAmount
     );
 
-    console.log("FLUID erc20 contract deployed at: ", fluidToken.address);
+    console.log("FLUID erc20 contract deployed at: ", fluidtoken.address);
 
     console.log("Wait 2 minutes before bytecodes are uploaded to verify contract");
     await new Promise(r => setTimeout(r, 120 * 1000));
     await verifyContract(
-        "FluidToken",
-        fluidToken.address,
+        "FLUIDtoken",
+        fluidtoken.address,
         [deployer.address, initialMintAmount]
     );
 }

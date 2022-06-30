@@ -8,13 +8,14 @@ import {IWETH} from "./interfaces/IWETH.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IAuctionHouse} from "./interfaces/IAuctionHouse.sol";
-import {IFluidToken} from "./interfaces/IFluidToken.sol";
-import {IFluidDAONFT} from "./interfaces/IFluidDAONFT.sol";
+import {IFLUIDtoken} from "./interfaces/IFLUIDtoken.sol";
+import {IFLUIDnft} from "./interfaces/IFLUIDnft.sol";
 
+// Fork of nouns auction house: 0xF15a943787014461d94da08aD4040f79Cd7c124e
 
-/// @title Fluid DAO Auction House
+/// @title FLUID DAO Auction House
 /// @author @cartercarlson
-/// @notice Fluid DAO auction contract to sell the Fluid DAO NFT.
+/// @notice FLUID DAO auction contract to sell the FLUID DAO NFT.
 contract AuctionHouse is
     Pausable,
     ReentrancyGuard,
@@ -24,7 +25,7 @@ contract AuctionHouse is
 {
 
     // The ERC721 token contract
-    IFluidDAONFT public fluidDAONFT;
+    IFLUIDnft public FLUIDnft;
 
     // The address of the WETH contract
     address public weth;
@@ -44,8 +45,8 @@ contract AuctionHouse is
     // The active auction
     IAuctionHouse.Auction public auction;
 
-    // FluidToken address
-    IFluidToken public fluidToken;
+    // Fluidtoken address
+    IFLUIDtoken public FLUIDtoken;
 
     // DAO to receive every 10th nft
     address public dao;
@@ -54,8 +55,8 @@ contract AuctionHouse is
     uint256 public rewardAmount = 1e18;
 
     constructor(
-        IFluidDAONFT _fluidDAONFT,
-        IFluidToken _fluidToken,
+        IFLUIDnft _FLUIDnft,
+        IFLUIDtoken _FLUIDtoken,
         address _dao,
         address _weth,
         uint256 _timeBuffer,
@@ -63,8 +64,8 @@ contract AuctionHouse is
         uint8 _minBidIncrementPercentage,
         uint256 _duration
     ) {
-        fluidDAONFT = _fluidDAONFT;
-        fluidToken = _fluidToken;
+        FLUIDnft = _FLUIDnft;
+        FLUIDtoken = _FLUIDtoken;
         dao = _dao;
         weth = _weth;
         timeBuffer = _timeBuffer;
@@ -120,7 +121,7 @@ contract AuctionHouse is
 
     /// @notice Create a bid for a FluidDAONFT, with a given amount.
     /// @dev This contract only accepts payment in ETH.
-    function createBid(uint256 fluidDAONFTId)
+    function createBid(uint256 FLUIDnftId)
         external
         payable
         override
@@ -128,7 +129,7 @@ contract AuctionHouse is
     {
         IAuctionHouse.Auction memory _auction = auction;
         require(
-            _auction.fluidDAONFTId == fluidDAONFTId,
+            _auction.FLUIDnftId == FLUIDnftId,
             "Fluid not up for auction"
         );
         require(block.timestamp < _auction.endTime, "Auction expired");
@@ -158,10 +159,10 @@ contract AuctionHouse is
             auction.endTime = _auction.endTime = block.timestamp + timeBuffer;
         }
 
-        emit AuctionBid(_auction.fluidDAONFTId, msg.sender, amount, extended);
+        emit AuctionBid(_auction.FLUIDnftId, msg.sender, amount, extended);
 
         if (extended) {
-            emit AuctionExtended(_auction.fluidDAONFTId, _auction.endTime);
+            emit AuctionExtended(_auction.FLUIDnftId, _auction.endTime);
         }
     }
 
@@ -194,24 +195,24 @@ contract AuctionHouse is
 
     function _createAuction() internal {
         // mint every 10th to dao
-        uint256 nextTokenId = fluidDAONFT.totalSupply() + 1;
+        uint256 nextTokenId = FLUIDnft.totalSupply() + 1;
         if (nextTokenId % 10 == 0) {
-            fluidDAONFT.mint(dao);
+            FLUIDnft.mint(dao);
 
-            // lower rewards every hundred minted by 10%
+            // lower rewards every two hundred minted by 10%
             if (nextTokenId % 200 == 0) {
                 rewardAmount -= (rewardAmount / 10);
             }
             // send FLUID rewards to dao
-            fluidToken.mint(dao, rewardAmount);
+            FLUIDtoken.mint(dao, rewardAmount);
         }
 
-        try fluidDAONFT.mint(address(this)) returns (uint256 fluidDAONFTId) {
+        try FLUIDnft.mint(address(this)) returns (uint256 FLUIDnftId) {
             uint256 startTime = block.timestamp;
             uint256 endTime = startTime + duration;
 
             auction = Auction({
-                fluidDAONFTId: fluidDAONFTId,
+                FLUIDnftId: FLUIDnftId,
                 amount: 0,
                 startTime: startTime,
                 endTime: endTime,
@@ -219,7 +220,7 @@ contract AuctionHouse is
                 settled: false
             });
 
-            emit AuctionCreated(fluidDAONFTId, startTime, endTime);
+            emit AuctionCreated(FLUIDnftId, startTime, endTime);
         } catch Error(string memory /* err */) {
             _pause();
         }
@@ -240,21 +241,21 @@ contract AuctionHouse is
         auction.settled = true;
 
         if (_auction.bidder == address(0)) {
-            fluidDAONFT.burn(_auction.fluidDAONFTId);
+            FLUIDnft.burn(_auction.FLUIDnftId);
         } else {
-            fluidDAONFT.transferFrom(
+            FLUIDnft.transferFrom(
                 address(this),
                 _auction.bidder,
-                _auction.fluidDAONFTId
+                _auction.FLUIDnftId
             );
-            fluidToken.mint(_auction.bidder, rewardAmount);
+            FLUIDtoken.mint(_auction.bidder, rewardAmount);
         }
         if (_auction.amount > 0) {
             _safeTransferETHWithFallback(owner(), _auction.amount);
         }
 
         emit AuctionSettled(
-            _auction.fluidDAONFTId,
+            _auction.FLUIDnftId,
             _auction.bidder,
             _auction.amount
         );
