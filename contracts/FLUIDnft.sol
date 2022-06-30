@@ -9,10 +9,10 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
-/// @title Fluid DAO ERC721
+/// @title FLUID DAO ERC721
 /// @author @cartercarlson
-/// @notice Fluid DAO core NFT contract.
-contract FluidDAONFT is ERC721A, ERC2981, Ownable, ReentrancyGuard {
+/// @notice NFT contract for FLUID DAO membership.
+contract FLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
 
     event Minted(uint256 indexed tokenId, address receiver);
     event Burned(uint256 indexed tokenId);
@@ -29,7 +29,7 @@ contract FluidDAONFT is ERC721A, ERC2981, Ownable, ReentrancyGuard {
         address _royaltyReceiver,
         address initialMintRecipient,
         uint256 initialMintAmount
-    ) ERC721A("FluidDAONFT", "FLDN") {
+    ) ERC721A("FLUID DAO NFT", "FLUIDid") {
         royaltyReceiver = royaltyReceiver;
 
         _setDefaultRoyalty(_royaltyReceiver, 1000); // 10%
@@ -46,10 +46,17 @@ contract FluidDAONFT is ERC721A, ERC2981, Ownable, ReentrancyGuard {
         _;
     }
 
+
+    /// @notice Function to set the royalty receiver contract address
+    /// @param _royaltyReceiver Address of royalty receiver contract
+    /// @dev Only callable by owner
     function setRoyaltyReceiver(address _royaltyReceiver) external onlyOwner {
         royaltyReceiver = _royaltyReceiver;
     }
 
+    /// @notice Function to set the auction house contract address
+    /// @param _auctionHouse Address of auction house contract
+    /// @dev Only callable by owner
     function setAuctionHouse(address _auctionHouse) external onlyOwner {
         auctionHouse = _auctionHouse;
     }

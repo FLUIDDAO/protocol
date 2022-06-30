@@ -5,9 +5,9 @@ import { Signer } from "ethers";
 import { impersonate, mineBlock, passHours, setAutomine, setNextBlockTimestamp } from "./utils/hardhatNode";
 import { deploy, fromETHNumber, toETHNumber, getContractAt } from "./utils/helpers";
 import {
-  FluidToken,
+  FLUIDtoken,
   StakingRewards,
-  FluidDAONFT,
+  FLUIDnft,
   AuctionHouse,
   RoyaltyReceiver,
   IWETH,
@@ -19,7 +19,7 @@ const setup = async () => {
 
   const initialMintAmount = 80;
   const initialMintAmountInEth = fromETHNumber(initialMintAmount);
-  // const DAO = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+  const DAO = "0xB17ca1BC1e9a00850B0b2436e41A055403512387";
   // args specific to auctionHouse
   const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
   const WETHWhale = "0x57757E3D981446D585Af0D9Ae4d7DF6D64647806";
@@ -39,8 +39,8 @@ const setup = async () => {
   let account2: SignerWithAddress;
   let dao: SignerWithAddress;
   let wethWhale: Signer;
-  let fluidERC20: FluidToken;
-  let fluidERC721: FluidDAONFT;
+  let fluidtoken: FLUIDtoken;
+  let fluidnft: FLUIDnft;
   let stakingRewards: StakingRewards;
   let auctionHouse: AuctionHouse;
   let royaltyReceiver: RoyaltyReceiver;
@@ -53,29 +53,29 @@ const setup = async () => {
 
     before(async () => {
       [deployer, account1, account2, dao] = await ethers.getSigners();
-      fluidERC20 = await deploy<FluidToken>(
-        "FluidToken",
+      fluidtoken = await deploy<FLUIDtoken>(
+        "FLUIDtoken",
         undefined,
         dao.address,
         initialMintAmountInEth
       );
-      sushiPair = await getContractAt<IUniswapV2Pair>("IUniswapV2Pair", await fluidERC20.sushiPair());
+      sushiPair = await getContractAt<IUniswapV2Pair>("IUniswapV2Pair", await fluidtoken.sushiPair());
 
       stakingRewards = await deploy<StakingRewards>(
         "StakingRewards",
         undefined,
-        fluidERC20.address
+        fluidtoken.address
       );
       royaltyReceiver = await deploy<RoyaltyReceiver>(
         "RoyaltyReceiver",
         undefined,
-        fluidERC20.address,
+        fluidtoken.address,
         dao.address,
         stakingRewards.address,
         sushiPair.address
       );
-      fluidERC721 = await deploy<FluidDAONFT>(
-        "FluidDAONFT",
+      fluidnft = await deploy<FLUIDnft>(
+        "FLUIDnft",
         undefined,
         royaltyReceiver.address,
         dao.address,
@@ -84,8 +84,8 @@ const setup = async () => {
       auctionHouse = await deploy<AuctionHouse>(
         "AuctionHouse",
         undefined,
-        fluidERC721.address,
-        fluidERC20.address,
+        fluidnft.address,
+        fluidtoken.address,
         dao.address,
         WETH,
         TIME_BUFFER,
@@ -95,11 +95,11 @@ const setup = async () => {
       );
 
       // now that auction house is deployed, set to the erc721
-      await fluidERC721.setAuctionHouse(auctionHouse.address, overrides);
-      await fluidERC20.setAuctionHouse(auctionHouse.address, overrides);
-      await fluidERC20.setStakingRewards(stakingRewards.address, overrides);
+      await fluidnft.setAuctionHouse(auctionHouse.address, overrides);
+      await fluidtoken.setAuctionHouse(auctionHouse.address, overrides);
+      await fluidtoken.setStakingRewards(stakingRewards.address, overrides);
 
-      const routerAddr = await fluidERC20.router();
+      const routerAddr = await fluidtoken.router();
       router = await getContractAt<IUniswapV2Router02>("IUniswapV2Router02", routerAddr);
       // // pre-load addresses with ETH for future use
       weth = await getContractAt<IWETH>("IWETH", WETH);
@@ -110,9 +110,9 @@ const setup = async () => {
       await weth.withdraw(500, overrides);
 
       // approval
-      await fluidERC20.connect(dao).approve(router.address, ethers.constants.MaxUint256);
-      await fluidERC20.connect(dao).approve(sushiPair.address, ethers.constants.MaxInt256)
-      await fluidERC20.connect(dao).approve(stakingRewards.address, ethers.constants.MaxInt256)
+      await fluidtoken.connect(dao).approve(router.address, ethers.constants.MaxUint256);
+      await fluidtoken.connect(dao).approve(sushiPair.address, ethers.constants.MaxInt256)
+      await fluidtoken.connect(dao).approve(stakingRewards.address, ethers.constants.MaxInt256)
       await weth.connect(dao).approve(router.address, ethers.constants.MaxUint256);
       await weth.connect(dao).approve(sushiPair.address, ethers.constants.MaxUint256);
     });
@@ -127,10 +127,10 @@ const setup = async () => {
 
     describe("Fluid Token", () => {
       it("Should have created token", async () => {
-        expect(fluidERC20.address).to.not.equal(ethers.constants.AddressZero);
+        expect(fluidtoken.address).to.not.equal(ethers.constants.AddressZero);
       })
       it("Should mint initial amount", async () => {
-        const balance = await fluidERC20.balanceOf(dao.address, overrides);
+        const balance = await fluidtoken.balanceOf(dao.address, overrides);
         expect(balance).to.equal(initialMintAmountInEth);
       });
       it("Should have created the sushi pair", async () => {
@@ -138,41 +138,53 @@ const setup = async () => {
       });
       it("Should accrue fees on transfers", async () => {
         // unapprove fee transfers for dao
-        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+        await fluidtoken.setNoFeeOnTransfer(dao.address, false, overrides);
 
         const halfMinted = initialMintAmountInEth.div(2);
-        await fluidERC20.connect(dao).transfer(account1.address, halfMinted, overrides);
+        await fluidtoken.connect(dao).transfer(account1.address, halfMinted, overrides);
         let fee1 = halfMinted.div(250);
         let receivedAmt1 = halfMinted.sub(fee1);
-        let balance0 = await fluidERC20.balanceOf(dao.address);
-        let balance1 = await fluidERC20.balanceOf(account1.address);
+        let balance0 = await fluidtoken.balanceOf(dao.address);
+        let balance1 = await fluidtoken.balanceOf(account1.address);
         expect(balance0).to.equal(halfMinted);
         expect(balance1).to.equal(receivedAmt1);
-        await fluidERC20.connect(account1).transfer(account2.address, receivedAmt1, overrides);
+        await fluidtoken.connect(account1).transfer(account2.address, receivedAmt1, overrides);
         let fee2 = receivedAmt1.div(250);
         let receivedAmt2 = receivedAmt1.sub(fee2);
-        balance1 = await fluidERC20.balanceOf(account1.address);
-        let balance2 = await fluidERC20.balanceOf(account2.address);
+        balance1 = await fluidtoken.balanceOf(account1.address);
+        let balance2 = await fluidtoken.balanceOf(account2.address);
         expect(balance1).to.equal(0);
         expect(balance2).to.equal(receivedAmt2);
       });
       it("Should not accrue fees if sender/recipient is approved for noFeeOnTransfers", async () => {
-        await fluidERC20.connect(dao).transfer(account1.address, initialMintAmountInEth, overrides);
-        await fluidERC20.connect(account1).transfer(dao.address, initialMintAmountInEth, overrides);
-        const feeBalance = await fluidERC20.balanceOf(fluidERC20.address);
+        await fluidtoken.connect(dao).transfer(account1.address, initialMintAmountInEth, overrides);
+        await fluidtoken.connect(account1).transfer(dao.address, initialMintAmountInEth, overrides);
+        const feeBalance = await fluidtoken.balanceOf(fluidtoken.address);
         expect(feeBalance).to.equal(0);
       });
       it("Should revert if setting slippage above 100%", async () => {
-        const tx = fluidERC20.connect(deployer).setSlippageAllowance(10001);
+        const tx = fluidtoken.connect(deployer).setSlippageAllowance(10001);
         await expect(tx).to.be.revertedWith("Cannot set slippage above 100%");
+      });
+      it("Should revert if setting reward rate above 10%", async () => {
+        const tx = fluidtoken.connect(deployer).setRewardRate(11);
+        await expect(tx).to.be.revertedWith("Cannot set rewardRate above 10%");
+      })
+      it("Should revert if non-owner tries to set reward rate", async () => {
+        const tx = fluidtoken.connect(account1).setRewardRate(9, overrides);
+        await expect(tx).to.be.revertedWith("Ownable: caller is not the owner")
+      })
+      it("Should revert if non-owner tries to set slippage allowance", async () => {
+        const tx = fluidtoken.connect(account1).setSlippageAllowance(5);
+        await expect(tx).to.be.revertedWith("Ownable: caller is not the owner")
       });
       it("Should revert on distributeFees() if slippage exceeds allowance", async () => {
         // unapprove fee transfers for dao
-        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+        await fluidtoken.setNoFeeOnTransfer(dao.address, false, overrides);
 
         const block = await ethers.provider.getBlock("latest");
         await router.connect(dao).addLiquidityETH(
-          fluidERC20.address,
+          fluidtoken.address,
           fromETHNumber(amountDepositFLUID),
           0,
           0,
@@ -180,17 +192,17 @@ const setup = async () => {
           block.timestamp + 100,
           { value: fromETHNumber(amountDepositETH), gasLimit: 1000000 }
         );
-        await fluidERC20.setSlippageAllowance(0, overrides);
-        const tx = fluidERC20.connect(account1).distributeFees(overrides);
+        await fluidtoken.setSlippageAllowance(0, overrides);
+        const tx = fluidtoken.connect(account1).distributeFees(overrides);
         await expect(tx).to.be.revertedWith("UniswapV2Router: INSUFFICIENT_OUTPUT_AMOUNT");
       });
       it("Should succeed in distributeFees()", async () => {
         // unapprove fee transfers for dao
-        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+        await fluidtoken.setNoFeeOnTransfer(dao.address, false, overrides);
 
         const block = await ethers.provider.getBlock("latest");
         await router.connect(dao).addLiquidityETH(
-          fluidERC20.address,
+          fluidtoken.address,
           fromETHNumber(amountDepositFLUID),
           0,
           0,
@@ -200,24 +212,24 @@ const setup = async () => {
         );
 
         // Fees should have accrued on LP
-        const totalSupplyBefore = await fluidERC20.totalSupply();
-        const fluidFluidBalanceBefore = await fluidERC20.balanceOf(fluidERC20.address);
-        const daoFluidBalanceBefore = await fluidERC20.balanceOf(dao.address);
+        const totalSupplyBefore = await fluidtoken.totalSupply();
+        const fluidFluidBalanceBefore = await fluidtoken.balanceOf(fluidtoken.address);
+        const daoFluidBalanceBefore = await fluidtoken.balanceOf(dao.address);
         expect(fluidFluidBalanceBefore).to.equal(fromETHNumber(amountDepositFLUID / 250));
-        expect(await sushiPair.balanceOf(fluidERC20.address)).to.equal(0);
+        expect(await sushiPair.balanceOf(fluidtoken.address)).to.equal(0);
         
-        let reward = fluidFluidBalanceBefore.div(100);
+        let reward = fluidFluidBalanceBefore.div(10);
         let amount = fluidFluidBalanceBefore.sub(reward).div(4);
 
-        await fluidERC20.connect(account1).distributeFees(overrides);
+        await fluidtoken.connect(account1).distributeFees(overrides);
 
-        expect((await fluidERC20.totalSupply()).add(amount)).to.equal(totalSupplyBefore);
-        expect(await fluidERC20.balanceOf(account1.address)).to.equal(reward);
+        expect((await fluidtoken.totalSupply()).add(amount)).to.equal(totalSupplyBefore);
+        expect(await fluidtoken.balanceOf(account1.address)).to.equal(reward);
         expect(
-          (await fluidERC20.balanceOf(dao.address)).sub(daoFluidBalanceBefore)
+          (await fluidtoken.balanceOf(dao.address)).sub(daoFluidBalanceBefore)
         ).to.equal(amount);
-        expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(amount);
-        expect(await sushiPair.balanceOf(fluidERC20.address)).to.be.gt(0);
+        expect(await fluidtoken.balanceOf(stakingRewards.address)).to.equal(amount);
+        expect(await sushiPair.balanceOf(fluidtoken.address)).to.be.gt(0);
       });
     });
 
@@ -228,12 +240,12 @@ const setup = async () => {
         await weth.connect(wethWhale).transfer(royaltyReceiver.address, fromETHNumber(1), overrides);
 
         // unapprove fee transfers for dao
-        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+        await fluidtoken.setNoFeeOnTransfer(dao.address, false, overrides);
 
         // We'll first need to add liquidity to the pool so distributing fees can trade
         const block = await ethers.provider.getBlock("latest");
         await router.connect(dao).addLiquidityETH(
-          fluidERC20.address,
+          fluidtoken.address,
           fromETHNumber(amountDepositFLUID),
           0,
           0,
@@ -245,9 +257,9 @@ const setup = async () => {
         const rrWethBalanceBefore = await weth.balanceOf(royaltyReceiver.address);
         const daoWethBalanceBefore = await weth.balanceOf(dao.address);
         const callerWethBalanceBefore = await weth.balanceOf(account1.address);
-        const srFluidBalanceBefore = await fluidERC20.balanceOf(stakingRewards.address);
+        const srFluidBalanceBefore = await fluidtoken.balanceOf(stakingRewards.address);
 
-        const functionCallReward = rrWethBalanceBefore.div(100);
+        const functionCallReward = rrWethBalanceBefore.div(10);
         const halfAfterReward = rrWethBalanceBefore.sub(functionCallReward).div(2);
 
         await royaltyReceiver.connect(account1).claimRoyalties(overrides);
@@ -255,7 +267,7 @@ const setup = async () => {
         const rrWethBalanceAfter = await weth.balanceOf(royaltyReceiver.address);
         const daoWethBalanceAfter = await weth.balanceOf(dao.address);
         const callerWethBalanceAfter = await weth.balanceOf(account1.address);
-        const srFluidBalanceAfter = await fluidERC20.balanceOf(stakingRewards.address);
+        const srFluidBalanceAfter = await fluidtoken.balanceOf(stakingRewards.address);
 
         expect(rrWethBalanceAfter).to.equal(0);
         expect(daoWethBalanceAfter).to.equal(daoWethBalanceBefore.add(halfAfterReward));
@@ -266,12 +278,12 @@ const setup = async () => {
 
     describe("Fluid NFT", () => {
       it("Should have created NFT", async () => {
-        expect(fluidERC721.address).to.not.equal(ethers.constants.AddressZero);
+        expect(fluidnft.address).to.not.equal(ethers.constants.AddressZero);
       });
       it("Should mint initial amount", async () => {
-        const balance = await fluidERC721.balanceOf(dao.address);
+        const balance = await fluidnft.balanceOf(dao.address);
         expect(balance).to.equal(initialMintAmount);
-        const supply = await fluidERC721.totalSupply();
+        const supply = await fluidnft.totalSupply();
         expect(supply).to.equal(balance);
       });
     });
@@ -282,11 +294,11 @@ const setup = async () => {
         const receipt = await tx.wait();
         const block = await ethers.provider.getBlock(receipt.blockNumber);
 
-        const balance = await fluidERC721.balanceOf(auctionHouse.address);
+        const balance = await fluidnft.balanceOf(auctionHouse.address);
         expect(balance).to.equal(1);
 
         const auction = await auctionHouse.auction();
-        expect(auction.fluidDAONFTId).to.equal(initialMintAmount + 1);
+        expect(auction.FLUIDnftId).to.equal(initialMintAmount + 1);
         expect(auction.startTime).to.equal(block.timestamp);
         expect(auction.endTime).to.equal(block.timestamp + DURATION);
 
@@ -298,9 +310,9 @@ const setup = async () => {
       it("Should revert if a user creates a bid for an inactive auction", async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
+        const { FLUIDnftId } = await auctionHouse.auction();
         const tx = auctionHouse.createBid(
-          fluidDAONFTId.add(1),
+          FLUIDnftId.add(1),
           {value: RESERVE_PRICE, gasLimit: 100000}
         );
         await expect(tx).to.be.revertedWith("Fluid not up for auction")
@@ -311,8 +323,8 @@ const setup = async () => {
 
         await ethers.provider.send('evm_increaseTime', [60 * 60 * 25]); // Add 25 hours
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
-        const tx = auctionHouse.connect(account1).createBid(fluidDAONFTId, {
+        const { FLUIDnftId } = await auctionHouse.auction();
+        const tx = auctionHouse.connect(account1).createBid(FLUIDnftId, {
           value: RESERVE_PRICE,
         });
 
@@ -322,8 +334,8 @@ const setup = async () => {
       it('Should revert if a user creates a bid with an amount below the reserve price', async () => {
         await (await auctionHouse.unpause()).wait();
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
-        const tx = auctionHouse.connect(account1).createBid(fluidDAONFTId, {
+        const { FLUIDnftId } = await auctionHouse.auction();
+        const tx = auctionHouse.connect(account1).createBid(FLUIDnftId, {
           value: RESERVE_PRICE.sub(1),
         });
 
@@ -333,11 +345,11 @@ const setup = async () => {
       it('Should revert if a user creates a bid less than the min bid increment percentage', async () => {
         await (await auctionHouse.unpause()).wait();
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
-        await auctionHouse.connect(account1).createBid(fluidDAONFTId, {
+        const { FLUIDnftId } = await auctionHouse.auction();
+        await auctionHouse.connect(account1).createBid(FLUIDnftId, {
           value: RESERVE_PRICE.mul(100),
         });
-        const tx = auctionHouse.connect(account2).createBid(fluidDAONFTId, {
+        const tx = auctionHouse.connect(account2).createBid(FLUIDnftId, {
           value: RESERVE_PRICE.mul(101),
         });
 
@@ -349,13 +361,13 @@ const setup = async () => {
       it('Should refund the previous bidder when the following user creates a bid', async () => {
         await (await auctionHouse.unpause()).wait();
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
-        await auctionHouse.connect(account1).createBid(fluidDAONFTId, {
+        const { FLUIDnftId } = await auctionHouse.auction();
+        await auctionHouse.connect(account1).createBid(FLUIDnftId, {
           value: RESERVE_PRICE,
         });
 
         const account1PostBidBalance = await account1.getBalance();
-        await auctionHouse.connect(account2).createBid(fluidDAONFTId, {
+        await auctionHouse.connect(account2).createBid(FLUIDnftId, {
           value: RESERVE_PRICE.mul(2),
         });
         const account1PostRefundBalance = await account1.getBalance();
@@ -366,7 +378,7 @@ const setup = async () => {
       it('Should burn a fluidDAONFT on auction settlement if no bids are received', async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
+        const { FLUIDnftId } = await auctionHouse.auction();
 
         await ethers.provider.send('evm_increaseTime', [60 * 60 * 25]); // Add 25 hours
 
@@ -374,44 +386,44 @@ const setup = async () => {
 
         await expect(tx)
           .to.emit(auctionHouse, 'AuctionSettled')
-          .withArgs(fluidDAONFTId, '0x0000000000000000000000000000000000000000', 0);
+          .withArgs(FLUIDnftId, '0x0000000000000000000000000000000000000000', 0);
       });
 
       it('Should emit an `AuctionBid` event on a successful bid', async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
+        const { FLUIDnftId } = await auctionHouse.auction();
         const tx = auctionHouse.connect(account1).createBid(
-          fluidDAONFTId,
+          FLUIDnftId,
           {value: RESERVE_PRICE, gasLimit: 1000000}
         );
 
         await expect(tx)
           .to.emit(auctionHouse, 'AuctionBid')
-          .withArgs(fluidDAONFTId, account1.address, RESERVE_PRICE, false);
+          .withArgs(FLUIDnftId, account1.address, RESERVE_PRICE, false);
       });
       it('Should emit an `AuctionExtended` event if the auction end time is within the time buffer', async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
-        const { fluidDAONFTId, endTime } = await auctionHouse.auction();
+        const { FLUIDnftId, endTime } = await auctionHouse.auction();
 
         await ethers.provider.send('evm_setNextBlockTimestamp', [endTime.sub(60 * 1).toNumber()]); // Subtract 5 mins from current end time
 
         const tx = auctionHouse.connect(account1).createBid(
-          fluidDAONFTId,
+          FLUIDnftId,
           {value: RESERVE_PRICE, gasLimit: 1000000}
         );
 
         await expect(tx)
           .to.emit(auctionHouse, 'AuctionExtended')
-          .withArgs(fluidDAONFTId, endTime.add(TIME_BUFFER - 60)); // -60 as there was 1 minute left in auction and we extended by 5
+          .withArgs(FLUIDnftId, endTime.add(TIME_BUFFER - 60)); // -60 as there was 1 minute left in auction and we extended by 5
       });
       it('Should emit `AuctionSettled` and `AuctionCreated` events if all conditions are met', async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
+        const { FLUIDnftId } = await auctionHouse.auction();
         await auctionHouse.connect(account1).createBid(
-          fluidDAONFTId,
+          FLUIDnftId,
           {value: RESERVE_PRICE, gasLimit: 1000000}
         );
 
@@ -424,29 +436,29 @@ const setup = async () => {
         const settledEvent = receipt.events?.find(e => e.event === 'AuctionSettled');
         const createdEvent = receipt.events?.find(e => e.event === 'AuctionCreated');
 
-        expect(settledEvent?.args?.fluidDAONFTId).to.equal(fluidDAONFTId);
+        expect(settledEvent?.args?.FLUIDnftId).to.equal(FLUIDnftId);
         expect(settledEvent?.args?.winner).to.equal(account1.address);
         expect(settledEvent?.args?.amount).to.equal(RESERVE_PRICE);
 
-        expect(createdEvent?.args?.fluidDAONFTId).to.equal(fluidDAONFTId.add(1));
+        expect(createdEvent?.args?.FLUIDnftId).to.equal(FLUIDnftId.add(1));
         expect(createdEvent?.args?.startTime).to.equal(timestamp);
         expect(createdEvent?.args?.endTime).to.equal(timestamp + DURATION);
       });
       it("Should correctly transfer ERC20 & 721 on auction close", async () => {
         await (await auctionHouse.unpause(overrides)).wait();
 
-        const { fluidDAONFTId } = await auctionHouse.auction();
+        const { FLUIDnftId } = await auctionHouse.auction();
         await auctionHouse.connect(account1).createBid(
-          fluidDAONFTId,
+          FLUIDnftId,
           {value: RESERVE_PRICE, gasLimit: 1000000}
         );
 
         await ethers.provider.send('evm_increaseTime', [60 * 60 * 13]); // Add 13 hrs, auction is now over
         const tx = await auctionHouse.connect(account1).settleCurrentAndCreateNewAuction(overrides);
 
-        const acc1TokenBalance = await fluidERC20.balanceOf(account1.address);
-        const acc1NFTBalance = await fluidERC721.balanceOf(account1.address);
-        const nftOwner = await fluidERC721.ownerOf(fluidDAONFTId);
+        const acc1TokenBalance = await fluidtoken.balanceOf(account1.address);
+        const acc1NFTBalance = await fluidnft.balanceOf(account1.address);
+        const nftOwner = await fluidnft.ownerOf(FLUIDnftId);
         expect(acc1TokenBalance).to.equal(fromETHNumber(1));
         expect(acc1NFTBalance).to.equal(1);
         expect(nftOwner).to.equal(account1.address);
@@ -456,9 +468,9 @@ const setup = async () => {
 
         // Auction off 9 
         for (let i=0; i<9; i++) {
-          let { fluidDAONFTId } = await auctionHouse.auction();
+          let { FLUIDnftId } = await auctionHouse.auction();
           await auctionHouse.connect(account1).createBid(
-            fluidDAONFTId,
+            FLUIDnftId,
             {value: RESERVE_PRICE, gasLimit: 1000000}
           );
           await ethers.provider.send('evm_increaseTime', [60 * 60 * 13]); // Add 13 hrs, auction is now over
@@ -466,12 +478,12 @@ const setup = async () => {
         }
 
         // we should now be on tokenId 91 with DAO holding #90
-        const supply = await fluidERC721.totalSupply();
-        const nftOwner = await fluidERC721.ownerOf(89);
-        const nftOwnedByDao = await fluidERC721.ownerOf(90);
-        const acc1TokenBalance = await fluidERC20.balanceOf(account1.address);
-        const daoTokenBalance = await fluidERC20.balanceOf(dao.address);
-        const daoNFTBalance = await fluidERC721.balanceOf(dao.address);
+        const supply = await fluidnft.totalSupply();
+        const nftOwner = await fluidnft.ownerOf(89);
+        const nftOwnedByDao = await fluidnft.ownerOf(90);
+        const acc1TokenBalance = await fluidtoken.balanceOf(account1.address);
+        const daoTokenBalance = await fluidtoken.balanceOf(dao.address);
+        const daoNFTBalance = await fluidnft.balanceOf(dao.address);
         // Mints 11 as 9 minted to acc1, 1 to dao, and 1 to auctionHouse for the new auction
         expect(supply).to.equal(initialMintAmount + 11);
         expect(nftOwner).to.equal(account1.address);
@@ -486,9 +498,9 @@ const setup = async () => {
         // As supply is already 80 and we're going to 200, we only need to mint 120
         // Which means if we auction 12 * 9 = 108, we'll actually mint 120
         for (let i = 0; i < 108; i++) {
-          let { fluidDAONFTId } = await auctionHouse.auction();
+          let { FLUIDnftId } = await auctionHouse.auction();
           await auctionHouse.connect(account1).createBid(
-            fluidDAONFTId,
+            FLUIDnftId,
             { value: RESERVE_PRICE, gasLimit: 1000000 }
           );
           await ethers.provider.send('evm_increaseTime', [60 * 60 * 13]); // Add 13 hrs, auction is now over
@@ -496,18 +508,18 @@ const setup = async () => {
         }
 
         // now acc2 will bid and win a fluid NFT with the new reward rate
-        let { fluidDAONFTId } = await auctionHouse.auction();
+        let { FLUIDnftId } = await auctionHouse.auction();
         await auctionHouse.connect(account2).createBid(
-          fluidDAONFTId,
+          FLUIDnftId,
           { value: RESERVE_PRICE, gasLimit: 1000000 }
         );
         await ethers.provider.send('evm_increaseTime', [60 * 60 * 13]); // Add 13 hrs, auction is now over
         await auctionHouse.connect(account2).settleCurrentAndCreateNewAuction(overrides);
 
-        const supply = await fluidERC721.totalSupply();
-        const acc1TokenBalance = await fluidERC20.balanceOf(account1.address);
-        const acc2TokenBalance = await fluidERC20.balanceOf(account2.address);
-        const daoTokenBalance = await fluidERC20.balanceOf(dao.address);
+        const supply = await fluidnft.totalSupply();
+        const acc1TokenBalance = await fluidtoken.balanceOf(account1.address);
+        const acc2TokenBalance = await fluidtoken.balanceOf(account2.address);
+        const daoTokenBalance = await fluidtoken.balanceOf(dao.address);
         expect(supply).to.equal(202); // on 201 as we are auctioning off token 202, 201 won by acc2
         // Dao will hold 80 initial fluid + 11 fluid from 90,100, ... 190 + 0.9 fluid from 200
         expect(daoTokenBalance).to.equal(fromETHNumber(80 + 11 + 0.9));
@@ -534,19 +546,19 @@ const setup = async () => {
         
         // stake 1/4 of balance at start
         await stakingRewards.connect(dao).stake(amount, overrides);
-        expect(await (await fluidERC20.balanceOf(dao.address))).to.equal(initialMintAmountInEth.sub(amount));
+        expect(await (await fluidtoken.balanceOf(dao.address))).to.equal(initialMintAmountInEth.sub(amount));
         expect(await stakingRewards.balanceOf(dao.address)).to.equal(amount);
 
         // stake remaining balance
         await stakingRewards.connect(dao).stake(amount.mul(3), overrides);
         const stakedBalance = await stakingRewards.balanceOf(dao.address);
         expect(stakedBalance).to.equal(amount.mul(4));
-        expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(amount.mul(4));
-        expect(await fluidERC20.balanceOf(dao.address)).to.equal(0);
+        expect(await fluidtoken.balanceOf(stakingRewards.address)).to.equal(amount.mul(4));
+        expect(await fluidtoken.balanceOf(dao.address)).to.equal(0);
         
         await stakingRewards.connect(dao).withdraw(stakedBalance, overrides);
-        expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(0);
-        expect(await fluidERC20.balanceOf(dao.address)).to.equal(stakedBalance);
+        expect(await fluidtoken.balanceOf(stakingRewards.address)).to.equal(0);
+        expect(await fluidtoken.balanceOf(dao.address)).to.equal(stakedBalance);
       });
       it("Should accurately update balances on stake/withdraw for fee transfer address", async () => {
         const amount = initialMintAmountInEth.div(4);
@@ -554,26 +566,26 @@ const setup = async () => {
         const amountAfterFee = amount.sub(fee);
 
         // First unapprove dao so that it pays for transfer fees
-        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+        await fluidtoken.setNoFeeOnTransfer(dao.address, false, overrides);
 
         // stake 1/4 of balance at start
         await stakingRewards.connect(dao).stake(amount, overrides);
-        expect(await (await fluidERC20.balanceOf(dao.address))).to.equal(initialMintAmountInEth.sub(amount));
+        expect(await (await fluidtoken.balanceOf(dao.address))).to.equal(initialMintAmountInEth.sub(amount));
         expect(await stakingRewards.balanceOf(dao.address)).to.equal(amountAfterFee);
 
         // stake remaining balance
         await stakingRewards.connect(dao).stake(amount.mul(3), overrides);
         const stakedBalance = await stakingRewards.balanceOf(dao.address);
         expect(stakedBalance).to.equal(amountAfterFee.mul(4));
-        expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(amountAfterFee.mul(4));
-        expect(await fluidERC20.balanceOf(dao.address)).to.equal(0);
+        expect(await fluidtoken.balanceOf(stakingRewards.address)).to.equal(amountAfterFee.mul(4));
+        expect(await fluidtoken.balanceOf(dao.address)).to.equal(0);
 
         const feeForWithdrawal = stakedBalance.div(250);
         const amountAfterWithdrawalfee = stakedBalance.sub(feeForWithdrawal);
 
         await stakingRewards.connect(dao).withdraw(stakedBalance, overrides);
-        expect(await fluidERC20.balanceOf(stakingRewards.address)).to.equal(0);
-        expect(await fluidERC20.balanceOf(dao.address)).to.equal(amountAfterWithdrawalfee);
+        expect(await fluidtoken.balanceOf(stakingRewards.address)).to.equal(0);
+        expect(await fluidtoken.balanceOf(dao.address)).to.equal(amountAfterWithdrawalfee);
       });
 
       it("Should revert if rewards exceed locked supply", async () => {
@@ -591,10 +603,10 @@ const setup = async () => {
         const amount = initialMintAmountInEth.div(4);
         const amountAfterFee = amount.sub(amount.div(250));
         // unapprove dao so it pays fee on transfer
-        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+        await fluidtoken.setNoFeeOnTransfer(dao.address, false, overrides);
         
         // pre-fund staking contract to give rewards
-        await fluidERC20.connect(dao).transfer(stakingRewards.address, amount, overrides);
+        await fluidtoken.connect(dao).transfer(stakingRewards.address, amount, overrides);
 
         let tx = await stakingRewards.connect(dao).stake(amount, overrides);
         let txBlockTime = (
@@ -611,7 +623,7 @@ const setup = async () => {
 
         // balance of pool should be staked + prefund (amount*2) - reward claimed
         expect(
-          toETHNumber(await fluidERC20.balanceOf(stakingRewards.address))
+          toETHNumber(await fluidtoken.balanceOf(stakingRewards.address))
         ).to.equal(
           toETHNumber(amountAfterFee.mul(2).sub(rewardInDay))
         );
@@ -620,7 +632,7 @@ const setup = async () => {
         expect(
           toETHNumber(initialMintAmountInEth.div(2).add(rewardAfterFee))
           ).to.equal(
-          toETHNumber(await fluidERC20.balanceOf(dao.address))
+          toETHNumber(await fluidtoken.balanceOf(dao.address))
         );
       });
       it("Should succeed in exit()", async () => {
@@ -630,9 +642,9 @@ const setup = async () => {
         const amount = initialMintAmountInEth.div(4);
         const amountAfterFee = amount.sub(amount.div(250));
         // unapprove dao so it pays fee on transfer
-        await fluidERC20.setNoFeeOnTransfer(dao.address, false, overrides);
+        await fluidtoken.setNoFeeOnTransfer(dao.address, false, overrides);
         // pre-fund staking contract to give rewards
-        await fluidERC20.connect(dao).transfer(stakingRewards.address, amount, overrides);
+        await fluidtoken.connect(dao).transfer(stakingRewards.address, amount, overrides);
 
         let tx = await stakingRewards.connect(dao).stake(amount, overrides);
         let txBlockTime = (
@@ -646,7 +658,7 @@ const setup = async () => {
         // balance of pool should be prefund amount - reward claimed
         // NOTE: need to round from 10**18 precision
         expect(
-          toETHNumber(await fluidERC20.balanceOf(stakingRewards.address))
+          toETHNumber(await fluidtoken.balanceOf(stakingRewards.address))
         ).to.be.closeTo(
           toETHNumber(amountAfterFee.sub(rewardInDay)),
           1e-18
@@ -658,7 +670,7 @@ const setup = async () => {
         expect(
           toETHNumber(initialMintAmountInEth.div(2).add(rewardAfterFee).add(amountAfterFeeWithdrawal))
           ).to.equal(
-          toETHNumber(await fluidERC20.balanceOf(dao.address))
+          toETHNumber(await fluidtoken.balanceOf(dao.address))
         );
       });
     });
