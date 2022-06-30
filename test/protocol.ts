@@ -19,6 +19,7 @@ const setup = async () => {
 
   const initialMintAmount = 80;
   const initialMintAmountInEth = fromETHNumber(initialMintAmount);
+  const IMAGE = "https://fluiddao.mypinata.cloud/ipfs/QmVUiZFL26TkwinCzkoJg72sWdiQgooVt45JPoje9iDcYu";
   const DAO = "0xB17ca1BC1e9a00850B0b2436e41A055403512387";
   // args specific to auctionHouse
   const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
@@ -77,6 +78,7 @@ const setup = async () => {
       fluidnft = await deploy<FLUIDnft>(
         "FLUIDnft",
         undefined,
+        IMAGE,
         royaltyReceiver.address,
         dao.address,
         initialMintAmount
