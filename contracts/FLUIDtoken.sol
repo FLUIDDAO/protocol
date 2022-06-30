@@ -55,7 +55,7 @@ contract FLUIDtoken is
     constructor(
         address _dao,
         uint256 initialSupply
-    ) ERC20("FLUID DAO", "FLUID") ERC20Permit("Fluid DAO")
+    ) ERC20("FLUID DAO", "FLUID") ERC20Permit("FLUID DAO")
     {
         // approve router spending
         IERC20(router.WETH()).approve(address(router), type(uint256).max);
@@ -65,11 +65,11 @@ contract FLUIDtoken is
             .createPair(address(this), router.WETH());
         sushiPair = IUniswapV2Pair(pair);
 
-        noFeeOnTransfer[_dao] = true;
         // set the rest of the contract variables
         dao = _dao;
         slippageAllowance = 5; // 5%
         rewardRate = 10; // 10%
+        noFeeOnTransfer[_dao] = true;
 
         _mint(dao, initialSupply);
     }

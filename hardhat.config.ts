@@ -41,9 +41,10 @@ const config: HardhatUserConfig = {
             // timeout: 1800000,
             chainId: 1,
         },
-        rinkeby: {
-            url: `https://rinkeby.infura.io/v3/${INFURA_KEY}` || "",
-            accounts: [`0x${PRIVATE_KEY}`]
+        kovan: {
+            url: `https://kovan.infura.io/v3/${INFURA_KEY}` || "",
+            accounts: [`0x${PRIVATE_KEY}`],
+            gas: 1000000
         },
         // TODO add prod
     },
