@@ -54,7 +54,6 @@ contract FLUIDtoken is
 
     constructor(
         address _dao,
-        address initialHolder,
         uint256 initialSupply
     ) ERC20("FLUID DAO", "FLUID") ERC20Permit("Fluid DAO")
     {
@@ -72,7 +71,7 @@ contract FLUIDtoken is
         slippageAllowance = 5; // 5%
         rewardRate = 10; // 10%
 
-        _mint(initialHolder, initialSupply);
+        _mint(dao, initialSupply);
     }
 
     function mint(address _to, uint256 amount) external override {
