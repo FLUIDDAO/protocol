@@ -54,9 +54,8 @@ contract FLUIDtoken is
 
     constructor(
         address _dao,
-        address initialHolder,
         uint256 initialSupply
-    ) ERC20("FLUID DAO", "FLUID") ERC20Permit("Fluid DAO")
+    ) ERC20("FLUID DAO", "FLUID") ERC20Permit("FLUID DAO")
     {
         // approve router spending
         IERC20(router.WETH()).approve(address(router), type(uint256).max);
@@ -66,13 +65,13 @@ contract FLUIDtoken is
             .createPair(address(this), router.WETH());
         sushiPair = IUniswapV2Pair(pair);
 
-        noFeeOnTransfer[_dao] = true;
         // set the rest of the contract variables
         dao = _dao;
         slippageAllowance = 5; // 5%
         rewardRate = 10; // 10%
+        noFeeOnTransfer[_dao] = true;
 
-        _mint(initialHolder, initialSupply);
+        _mint(dao, initialSupply);
     }
 
     function mint(address _to, uint256 amount) external override {
@@ -105,16 +104,18 @@ contract FLUIDtoken is
 
     /// @notice Function to set the auction house contract address
     /// @param _auctionHouse Address of auction house contract
-    /// @dev Only callable by owner
+    /// @dev Only callable by owner, once
     function setAuctionHouse(address _auctionHouse) external onlyOwner {
+        require(auctionHouse == address(0), "Already set");
         auctionHouse = _auctionHouse;
         emit SetAuctionHouse(_auctionHouse);
     }
 
     /// @notice Function to set the staking rewards contract address
     /// @param _stakingRewards Address of staking rewards contract
-    /// @dev Only callable by owner
+    /// @dev Only callable by owner, once
     function setStakingRewards(address _stakingRewards) external onlyOwner {
+        require(stakingRewards == address(0), "Already set");
         stakingRewards = _stakingRewards;
         emit SetStakingRewards(_stakingRewards);
     }

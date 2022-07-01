@@ -52,7 +52,7 @@ contract AuctionHouse is
     address public dao;
 
     // FLUID erc20 amount rewarded to a winner
-    uint256 public rewardAmount = 1e18;
+    uint256 public rewardAmount = 1000 * 1e18;
 
     constructor(
         IFLUIDnft _FLUIDnft,

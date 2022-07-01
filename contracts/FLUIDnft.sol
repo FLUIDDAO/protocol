@@ -17,20 +17,19 @@ contract FLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
     event Minted(uint256 indexed tokenId, address receiver);
     event Burned(uint256 indexed tokenId);
 
-    using Strings for uint256;
-
     bool public isAuctionHouseLocked;
     address public royaltyReceiver;
     address public auctionHouse;
-    string private _baseURIExtended;
-    mapping(uint256 => string) _tokenURIs;
+    string private _tokenURI;
 
     constructor(
+        string memory __tokenURI,
         address _royaltyReceiver,
         address initialMintRecipient,
         uint256 initialMintAmount
     ) ERC721A("FLUID DAO NFT", "FLUIDid") {
-        royaltyReceiver = royaltyReceiver;
+        _tokenURI = __tokenURI;
+        royaltyReceiver = _royaltyReceiver;
 
         _setDefaultRoyalty(_royaltyReceiver, 1000); // 10%
         _safeMint(initialMintRecipient, initialMintAmount);
@@ -46,18 +45,11 @@ contract FLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
         _;
     }
 
-
-    /// @notice Function to set the royalty receiver contract address
-    /// @param _royaltyReceiver Address of royalty receiver contract
-    /// @dev Only callable by owner
-    function setRoyaltyReceiver(address _royaltyReceiver) external onlyOwner {
-        royaltyReceiver = _royaltyReceiver;
-    }
-
     /// @notice Function to set the auction house contract address
     /// @param _auctionHouse Address of auction house contract
-    /// @dev Only callable by owner
+    /// @dev Only callable by owner, once
     function setAuctionHouse(address _auctionHouse) external onlyOwner {
+        require(auctionHouse == address(0), "Already set");
         auctionHouse = _auctionHouse;
     }
 
@@ -87,22 +79,6 @@ contract FLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
         emit Burned(tokenId);
     }
 
-    function _baseURI() internal view virtual override returns (string memory) {
-        return _baseURIExtended;
-    }
-
-    // Sets base URI for all tokens, only able to be called by contract owner
-    function setBaseURI(string memory baseURI_) external onlyOwner {
-        _baseURIExtended = baseURI_;
-    }
-
-    function setTokenURI(uint256 tokenId, string memory tokenURI_)
-        external
-        onlyOwner
-    {
-        _tokenURIs[tokenId] = tokenURI_;
-    }
-
     function tokenURI(uint256 tokenId)
         public
         view
@@ -114,16 +90,7 @@ contract FLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
             _exists(tokenId),
             "ERC721Metadata: URI query for nonexistent token"
         );
-
-        string memory _tokenURI = _tokenURIs[tokenId];
-        if (bytes(_tokenURI).length != 0) {
-            return _tokenURI;
-        }
-
-        string memory base = _baseURI();
-        require(bytes(base).length != 0, "baseURI not set");
-        // If there is a baseURI but no tokenURI, concatenate the tokenID to the baseURI.
-        return string(abi.encodePacked(base, tokenId.toString()));
+        return _tokenURI;
     }
 
     function supportsInterface(bytes4 interfaceId)
@@ -144,7 +111,7 @@ contract FLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
     }
 
     // https://github.com/chiru-labs/ERC721A/blob/534dd35c733b749b2888d28af24defccc7b45e6f/contracts/ERC721A.sol#L122
-    function _startTokenId() internal view override returns (uint256) {
+    function _startTokenId() internal pure override returns (uint256) {
         return 1;
     }
 }
