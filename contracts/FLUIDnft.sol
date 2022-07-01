@@ -12,7 +12,7 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 /// @title FLUID DAO ERC721
 /// @author @cartercarlson
 /// @notice NFT contract for FLUID DAO membership.
-contract TestFLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
+contract FLUIDnft is ERC721A, ERC2981, Ownable, ReentrancyGuard {
 
     event Minted(uint256 indexed tokenId, address receiver);
     event Burned(uint256 indexed tokenId);

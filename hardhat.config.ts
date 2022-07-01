@@ -43,9 +43,15 @@ const config: HardhatUserConfig = {
         kovan: {
             url: `https://kovan.infura.io/v3/${INFURA_KEY}` || "",
             accounts: [`0x${PRIVATE_KEY}`],
-            gas: 1000000
-        }
-        // TODO add prod
+            gas: "auto",
+            chainId: 42
+        },
+        mainnet: {
+            url: `https://mainnet.infura.io/v3/${INFURA_KEY}` || "",
+            accounts: [`0x${PRIVATE_KEY}`],
+            gas: "auto",
+            chainId: 1
+        },
     },
     typechain: {
         outDir: "artifacts/types",

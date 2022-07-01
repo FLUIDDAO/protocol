@@ -18,7 +18,8 @@ import {
 const setup = async () => {
 
   const initialMintAmount = 80;
-  const initialMintAmountInEth = fromETHNumber(initialMintAmount);
+  const fluidPerNft = 1000;
+  const initialMintAmountInEth = fromETHNumber(initialMintAmount * fluidPerNft);
   const IMAGE = "https://fluiddao.mypinata.cloud/ipfs/QmVUiZFL26TkwinCzkoJg72sWdiQgooVt45JPoje9iDcYu";
   const DAO = "0xB17ca1BC1e9a00850B0b2436e41A055403512387";
   // args specific to auctionHouse
@@ -31,9 +32,9 @@ const setup = async () => {
   const DURATION = 60 * 60 * 12; // 12 hrs
   const overrides = {gasLimit: 1000000}
   // Amounts for providing initial liquidity
-  // Let's say 1 FLUID = 3 ETH
+  // Let's say 1000 FLUID = 3 ETH
   const amountDepositETH = 120;
-  const amountDepositFLUID = 40;
+  const amountDepositFLUID = 40 * fluidPerNft;
 
   let deployer: SignerWithAddress;
   let account1: SignerWithAddress;
@@ -461,7 +462,7 @@ const setup = async () => {
         const acc1TokenBalance = await fluidtoken.balanceOf(account1.address);
         const acc1NFTBalance = await fluidnft.balanceOf(account1.address);
         const nftOwner = await fluidnft.ownerOf(FLUIDnftId);
-        expect(acc1TokenBalance).to.equal(fromETHNumber(1));
+        expect(acc1TokenBalance).to.equal(fromETHNumber(fluidPerNft));
         expect(acc1NFTBalance).to.equal(1);
         expect(nftOwner).to.equal(account1.address);
       });
@@ -491,8 +492,8 @@ const setup = async () => {
         expect(nftOwner).to.equal(account1.address);
         expect(nftOwnedByDao).to.equal(dao.address);
         expect(daoNFTBalance).to.equal(initialMintAmount + 1);
-        expect(acc1TokenBalance).to.equal(fromETHNumber(9));
-        expect(daoTokenBalance).to.equal(fromETHNumber(initialMintAmount + 1));
+        expect(acc1TokenBalance).to.equal(fromETHNumber(9 * fluidPerNft));
+        expect(daoTokenBalance).to.equal(fromETHNumber((initialMintAmount + 1) * fluidPerNft));
       });
       it("Should decrease FLUID every 200th token", async () => {
         await (await auctionHouse.unpause(overrides)).wait();
@@ -524,10 +525,10 @@ const setup = async () => {
         const daoTokenBalance = await fluidtoken.balanceOf(dao.address);
         expect(supply).to.equal(202); // on 201 as we are auctioning off token 202, 201 won by acc2
         // Dao will hold 80 initial fluid + 11 fluid from 90,100, ... 190 + 0.9 fluid from 200
-        expect(daoTokenBalance).to.equal(fromETHNumber(80 + 11 + 0.9));
+        expect(daoTokenBalance).to.equal(fromETHNumber((80 + 11 + 0.9) * fluidPerNft));
         // acc1 will hold 108 fluid (1 from each auction)
-        expect(acc1TokenBalance).to.equal(fromETHNumber(108));
-        expect(acc2TokenBalance).to.equal(fromETHNumber(0.9));
+        expect(acc1TokenBalance).to.equal(fromETHNumber(108 * fluidPerNft));
+        expect(acc2TokenBalance).to.equal(fromETHNumber(0.9 * fluidPerNft));
       });
     });
 
